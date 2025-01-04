@@ -1,0 +1,3 @@
+[submodule "iamai-core"]
+	path = iamai-core
+	url = https://github.com/iamai-core/iamai-core.git
