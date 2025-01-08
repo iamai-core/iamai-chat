@@ -6,7 +6,7 @@ int main() {
     try {
         // Initialize interface with model path
         // TODO: Replace with your actual model path
-        const std::string model_path = "../../../models/tinyllama-2-1b-miniguanaco.Q4_K_M.gguf";
+        const std::string model_path = "C:\\Users\\Mike\\Desktop\\Projx\\iamai-chat\\iamai-core\\models\\llama-3.2-1b-instruct-q4_k_m.gguf";//"iamai-core\models";
         Interface myInterface(model_path);
 
         // Configure generation parameters
