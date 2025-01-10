@@ -11,7 +11,20 @@ function SideBar() {
           <div className="john-doe">John Doe </div>
           <div className="line-2"></div>
           <div className="line-1"></div>
-        </div>
+      </div>
+      
+      <div className="chat-container">
+        <aside className="sidebar">
+          <div className="profile">
+            <div className="user-icon"></div>
+            <div className="user-name">John Doe</div>
+          </div>
+          <div className="sidebar-actions">
+            <div className="action">Settings</div>
+            <div className="action">Profile</div>
+          </div>
+        </aside>
+          </div>
       );
 }
 
