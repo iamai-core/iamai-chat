@@ -1,7 +1,6 @@
 * {
   box-sizing: border-box;
 }
- 
 body {
   font-family: 'Inter', sans-serif;
   background-color: #303030;
@@ -9,13 +8,11 @@ body {
   padding: 0;
   color: white;
 }
- 
 .chat-app {
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
- 
 header {
   background-color: #1d1d1d;
   color: white;

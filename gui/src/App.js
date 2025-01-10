@@ -3,10 +3,15 @@ import robot_Img from "./../src/assets/Robot.png";
 import add_Img from "./../src/assets/add_btn.PNG";
 import gear_Icon from "./../src/assets/gear_icon.PNG";
 import React, { useState } from "react";
+import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
+import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator } from '@chatscope/chat-ui-kit-react';
 
 function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [attachFile, setIsAttachOpen] = useState(false);
+  
+  const [messages, setMessages] = useState([])
+  const [isTyping, setIsTyping] = useState(false);
 
   function toggleMenu(){
     setIsMenuOpen((toggle) => !toggle);
@@ -15,6 +20,19 @@ function App() {
   function toggleAttach(){
     setIsAttachOpen((toggle) => !toggle);
   };
+  
+  
+  const handleSend = async (message) => {
+    const newMessage = {
+      message,
+      direction: 'outgoing',
+      sender: "user"
+    };
+    const newMessages = [...messages, newMessage];
+    setMessages(newMessages);
+    setIsTyping(true);
+  };
+  
   
   return (
     <div className="chat-app">
@@ -27,12 +45,20 @@ function App() {
           <h1 className="app-name">Iamai</h1>
         </div>
       </header>
-        <main className="chat-main">
-          <div className="chat-input-container">
-            <input type="text" className="chat-input" placeholder="What’s on your mind?" />
-            <button className="send-button">Send</button>
-          </div>
-        </main>
+        <MainContainer className="chat-main">
+          <ChatContainer className="chat-container">       
+            <MessageList 
+              scrollBehavior="smooth" 
+              typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}
+            >
+              {messages.map((message, i) => {
+                console.log(message)
+                return <Message key={i} model={message} />
+              })}
+            </MessageList>
+            <MessageInput className="chat-input" placeholder="What’s on your mind?" onSend={handleSend} />        
+          </ChatContainer>
+        </MainContainer>
         
         {/* Overlay Screen */}
         {isMenuOpen && (
@@ -67,6 +93,6 @@ function App() {
       
       </div>
   );
-};
+}
 
 export default App;
