@@ -1,31 +1,31 @@
+import menu_Img from "./../src/assets/menu_btn.PNG";
+import add_Img from "./../src/assets/add_btn.PNG";
+import gear_Icon from "./../src/assets/gear_icon.PNG";
+
 function SideBar() {
     return (
-        <div className={"pop-up-1 " + className}>
-          <div className="rectangle-8"></div>
-          <Menu className="menu-instance"></Menu>
-          <img className="rectangle-9" src="rectangle-90.svg" />
-          <div className="settings">Settings </div>
-          <img className="setting-line-light" src="setting-line-light0.svg" />
-          <img className="add-square-light" src="add-square-light0.svg" />
-          <div className="ellipse-6"></div>
-          <div className="john-doe">John Doe </div>
-          <div className="line-2"></div>
-          <div className="line-1"></div>
+    <div className="sidebar-overlay">
+          <div className="sidebar">
+            <nav>
+              <button className="close-menu" type="Submit" >
+                <img src={menu_Img} alt="close" />
+              </button>
+              <button className="add-button">
+                <img src={add_Img} alt="Add" />
+              </button>
+            </nav>
+            <hr className="divider" />
+            <div className="profile-section">
+              <div className="profile-circle"></div>
+              <div className="profile-name">John Doe</div>
+            </div>
+            <button className="settings-button">
+              <img src={gear_Icon} alt="Settings Icon" />
+              <span>Settings</span>
+            </button>
+          </div>
       </div>
-      
-      <div className="chat-container">
-        <aside className="sidebar">
-          <div className="profile">
-            <div className="user-icon"></div>
-            <div className="user-name">John Doe</div>
-          </div>
-          <div className="sidebar-actions">
-            <div className="action">Settings</div>
-            <div className="action">Profile</div>
-          </div>
-        </aside>
-          </div>
-      );
+    );
 }
 
 export default SideBar;
