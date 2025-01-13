@@ -5,12 +5,12 @@ import gear_Icon from "./../src/assets/gear_icon.PNG";
 import React, { useState } from "react";
 import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator } from '@chatscope/chat-ui-kit-react';
+import Alert from 'react-bootstrap/Alert';
 
 function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [attachFile, setIsAttachOpen] = useState(false);
-  
-  const [messages, setMessages] = useState([])
+    const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
 
   function toggleMenu(){
@@ -23,17 +23,18 @@ function App() {
   
   
   const handleSend = async (message) => {
-    const newMessage = {
-      message,
-      direction: 'outgoing',
-      sender: "user"
-    };
-    const newMessages = [...messages, newMessage];
-    setMessages(newMessages);
-    setIsTyping(true);
+      const newMessage = {
+        message,
+        direction: 'outgoing',
+        sender: "user"
+      };
+      setMessages([...messages, newMessage]);
+      setIsTyping(true);
   };
-  
-  
+
+  const handleAttachmentClick = () => {
+  };
+
   return (
     <div className="chat-app">
       <header className="header">
