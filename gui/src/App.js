@@ -42,24 +42,29 @@ function App() {
           <button className="menu-btn" onClick={toggleMenu} type="Submit" >
             <img className="menu" src={menu_Img} alt="menu"/>
           </button>
-          <img className="Iamai" src={robot_Img} alt="Iamai" />
+          <img className="iamai" src={robot_Img} alt="Iamai" />
           <h1 className="app-name">Iamai</h1>
         </div>
       </header>
-        <MainContainer className="chat-main">
-          <ChatContainer className="chat-container">       
-            <MessageList 
-              scrollBehavior="smooth" 
-              typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}
-            >
-              {messages.map((message, i) => {
-                console.log(message)
-                return <Message key={i} model={message} />
-              })}
-            </MessageList>
-            <MessageInput className="chat-input" placeholder="What’s on your mind?" onSend={handleSend} />        
-          </ChatContainer>
-        </MainContainer>
+      <MainContainer className="chat-main">
+        <ChatContainer className="chat-container">
+          <MessageList  
+            scrollBehavior="smooth" 
+            typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}
+          >
+            {messages.map((message, i) => (
+              <Message key={i} model={message} />
+            ))}
+          </MessageList>
+          <MessageInput 
+            className="chat-input" 
+            placeholder="What’s on your mind?" 
+            onSend={handleSend} 
+            onAttachClick={handleAttachmentClick}
+            disabled={isTyping}
+          />
+        </ChatContainer>
+      </MainContainer>
         
         {/* Overlay Screen */}
         {isMenuOpen && (
