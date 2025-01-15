@@ -1,6 +1,7 @@
 * {
   box-sizing: border-box;
 }
+
 body {
   font-family: 'Inter', sans-serif;
   background-color: #303030;
@@ -8,11 +9,13 @@ body {
   padding: 0;
   color: white;
 }
+
 .chat-app {
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
+
 .header {
   background-color: #1d1d1d;
   color: white;
@@ -21,6 +24,7 @@ body {
   justify-content: space-between;
   align-items: center;
 }
+
 .menu-container {
   display: flex;
   align-items: center;
@@ -32,25 +36,29 @@ body {
   width: 30px;
   height: 30px;
 }
-.menu-btn{
+
+.menu-btn {
   background: #919191;
   border: none;
   border-radius: 25%;
   cursor: pointer;
 }
-.menu-btn:hover{
+
+.menu-btn:hover {
   background: #585858;
 }
-.menu-btn{
+
+.menu-btn {
   background: #919191;
   border: none;
   border-radius: 25%;
   cursor: pointer;
 }
-.menu-btn:hover{
+
+.menu-btn:hover {
   background: #585858;
 }
- 
+
 .iamai {
   width: 50px;
   height: 50px;
@@ -58,20 +66,20 @@ body {
   align-items: center;
   background-color: #00911d;
 }
- 
+
 .app-name {
   font-size: 24px;
   font-weight: bold;
   margin-left: 15px;
 }
- 
+
 .chat-container {
   display: flex;
   flex-grow: 1;
   flex-direction: column;
   background-color: #f6e1dc;
 }
- 
+
 .chat-main {
   flex-grow: 1;
   padding: 20px;
@@ -80,48 +88,48 @@ body {
   justify-content: space-between;
   background-color: #f6e1dc;
 }
- 
+
 .messages-container {
   flex-grow: 1;
   overflow-y: auto;
   margin-bottom: 20px;
 }
- 
+
 .message {
   margin-bottom: 15px;
   display: flex;
 }
- 
+
 .message.bot {
   justify-content: flex-start;
 }
- 
+
 .message.user {
   justify-content: flex-end;
 }
- 
+
 .message-content {
   padding: 15px;
   border-radius: 15px;
   font-size: 18px;
   max-width: 70%;
 }
- 
+
 .message.bot .message-content {
   background-color: #424242;
   color: white;
 }
- 
+
 .message.user .message-content {
   background-color: #575757;
   color: white;
 }
- 
+
 .chat-input-container {
   display: flex;
   align-items: center;
 }
- 
+
 .chat-input {
   width: 100%;
   padding: 15px;
@@ -131,7 +139,7 @@ body {
   background-color: #1d1d1d;
   color: white;
 }
- 
+
 .send-button {
   background-color: #575757;
   color: white;
@@ -141,18 +149,18 @@ body {
   border-radius: 25px;
   cursor: pointer;
 }
- 
+
 .send-button:hover {
   background-color: #6a6a6a;
 }
- 
+
 .chat-header {
   font-size: 24px;
   margin-bottom: 10px;
   text-align: center;
   font-weight: bold;
 }
- 
+
 .chat-button {
   padding: 15px 20px;
   background-color: #575757;
@@ -162,11 +170,11 @@ body {
   color: white;
   font-size: 18px;
 }
- 
+
 .chat-button:hover {
   background-color: #6a6a6a;
 }
- 
+
 
 @media (max-width: 768px) {
   .header {
@@ -180,7 +188,8 @@ body {
     width: 100%;
   }
 
-  .menu, .iamai {
+  .menu,
+  .iamai {
     margin: 5px;
   }
 
@@ -188,7 +197,7 @@ body {
     font-size: 20px;
     margin-top: 10px;
   }
- 
+
   .chat-main {
     padding: 10px;
   }
@@ -207,6 +216,21 @@ body {
     padding: 8px 16px;
     font-size: 16px;
   }
+  .settings-header {
+    flex-direction: column;
+    align-items: center;
+}
+
+.back-button {
+    margin-bottom: 10px;
+    width: 100%;
+    max-width: 300px;
+}
+
+.settings-title {
+    margin: 0;
+    text-align: center;
+}
 }
 
 /*----------------Below is side bar css----------------------*/
@@ -218,7 +242,8 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5); /* Semi-transparent overlay */
+  background: rgba(0, 0, 0, 0.5);
+  /* Semi-transparent overlay */
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -328,5 +353,136 @@ body {
   color: #333;
 }
 
-/*----------------Below is attach block css----------------------*/
+.settings-section {
+  margin: 20px 0;
+  padding: 10px;
+  background-color: #424242;
+  border-radius: 8px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 
+.settings-section label {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.settings-section .dropdown-toggle {
+  background-color: #575757;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.settings-section .dropdown-menu {
+  background-color: #575757;
+  border: none;
+}
+
+.settings-section .dropdown-item {
+  color: white;
+  padding: 10px;
+}
+
+.settings-section .dropdown-item:hover {
+  background-color: #00911d;
+}
+
+.font-slider, .speed-slider {
+  width: 100%;
+  margin-top: 10px;
+  height: 25px;
+}
+
+.settings-section p {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.slider-track {
+  background: #575757;
+  top: 8px;
+  height: 4px;
+}
+
+.slider-track.slider-track-0 {
+  background: #00911d;
+}
+
+.slider-thumb {
+  background: #00911d;
+  height: 20px;
+  width: 20px;
+  border-radius: 100%;
+  cursor: pointer;
+  outline: none;
+}
+
+.slider-mark {
+  background-color: #585858;
+  height: 10px;
+  width: 10px;
+  border-radius: 50%;
+  top: 6px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.settings-title {
+  margin-left: 0;
+  flex-grow: 1;
+  text-align: center;
+}
+
+.back-button {
+  padding: 10px 20px;
+  background-color: #919191;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  background-color: #585858;
+}
+
+@media (max-width: 480px) {
+  .settings-section {
+      padding: 8px;
+  }
+
+  .settings-section label {
+      font-size: 14px;
+  }
+
+  .font-slider, .speed-slider {
+      height: 20px;
+  }
+
+  .slider-thumb {
+      height: 18px;
+      width: 18px;
+  }
+
+  .slider-mark {
+      height: 8px;
+      width: 8px;
+  }
+}
+
+
+
+/*----------------Below is attach block css----------------------*/
