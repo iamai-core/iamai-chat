@@ -42,17 +42,7 @@ body {
   border: none;
   border-radius: 25%;
   cursor: pointer;
-}
-
-.menu-btn:hover {
-  background: #585858;
-}
-
-.menu-btn {
-  background: #919191;
-  border: none;
-  border-radius: 25%;
-  cursor: pointer;
+  margin-bottom: 110px;
 }
 
 .menu-btn:hover {
@@ -60,16 +50,18 @@ body {
 }
 
 .iamai {
-  width: 150px;
-  height: 150px;
-  margin-left: 15px;
+  width: 120px;
+  height: 120px;
+  margin-left: 80px;
   align-items: center;
   background-color: #00911d;
 }
 
-.app-name {
-  font-size: 24px;
-  font-weight: bold;
+.logo {
+  width: 120px;
+  height: 120px;
+  margin-left: 15px;
+  align-items: right;
   margin-left: 15px;
 }
 

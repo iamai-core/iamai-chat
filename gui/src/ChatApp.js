@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from "react";
 import { Link } from 'react-router-dom';
 import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator } from '@chatscope/chat-ui-kit-react';
 import menu_Img from "./assets/menu_btn.PNG";
+import logo from "./assets/iamai_logo.png"
 import idle from "./assets/iamaiidle.jpg";
 import listening from "./assets/iamailistening.jpg";
 import speaking from "./assets/iamaispeaking.jpg";
@@ -70,7 +71,7 @@ function ChatApp() {
                         <img className="menu" src={menu_Img} alt="menu" />
                     </button>
                     <img className="iamai" src={getAiImage()} alt="Iamai" />
-                    <h1 className="app-name">Iamai</h1>
+                    <img className="logo" src={logo} alt="Logo" />
                 </div>
             </header>
             <MainContainer className="chat-main">
