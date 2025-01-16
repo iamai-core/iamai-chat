@@ -19,6 +19,7 @@ function ChatApp() {
     const [userInput, setUserInput] = useState("");
 
     const toggleMenu = () => setIsMenuOpen((prev) => !prev);
+
     const handleSend = async (message) => {
         const newMessage = {
             message,
@@ -26,15 +27,17 @@ function ChatApp() {
             sender: "user"
         };
         setMessages((prevMessages) => [...prevMessages, newMessage]);
+        setUserInput("");
         setIsTyping(true);
         setAiStatus('thinking');
-        setTimeout(() => {
-            setIsTyping(false);
-            setMessages((prevMessages) => [...prevMessages, { message: "AI's response here", direction: 'incoming', sender: "AI" }]);
-            setAiStatus('speaking');
-            setTimeout(() => setAiStatus('idle'), 1000);
-        }, messageSpeed);
+        // setTimeout(() => {
+        //     setIsTyping(false);
+        //     setMessages((prevMessages) => [...prevMessages, { message: "AI's response here", direction: 'incoming', sender: "AI" }]);
+        //     setAiStatus('speaking');
+        //     setTimeout(() => setAiStatus('idle'), 1000);
+        // }, messageSpeed);
     };
+
 
     const getAiImage = () => {
         switch (aiStatus) {
@@ -49,30 +52,15 @@ function ChatApp() {
         }
     };
 
-    const handleInputChange = (event) => {
-        if (event?.target?.value !== undefined) {
-            const inputValue = event.target.value;
-            setUserInput(inputValue);
-            if (inputValue.trim()) {
-                setAiStatus('listening');
-            } else {
-                setAiStatus('idle');
-            }
-        }
-    };
-
-    useEffect(() => {
-        if (userInput.trim()) {
-            const typingTimeout = setTimeout(() => {
-                if (!userInput.trim()) {
-                    setAiStatus('idle');
-                }
-            }, 1000);
-            return () => clearTimeout(typingTimeout);
+    const handleInputChange = (innerHtml, textContent) => {
+        setUserInput(textContent);
+        if (textContent !== "") {
+            setAiStatus('listening');
         } else {
             setAiStatus('idle');
         }
-    }, [userInput]);
+    };
+
 
     return (
         <div className="chat-app" style={{ backgroundColor: headerColor }}>
@@ -98,15 +86,14 @@ function ChatApp() {
                     <MessageInput
                         className="chat-input"
                         placeholder="What’s on your mind?"
-                        //value={userInput}
+                        value={userInput}
                         onChange={handleInputChange}
-                        onSend={handleSend}
+                        onSend={(message) => handleSend(message)}
                         disabled={isTyping}
                         style={{ fontSize: `${messageFontSize}px` }}
                     />
                 </ChatContainer>
             </MainContainer>
-
             {isMenuOpen && (
                 <div className="sidebar-overlay">
                     <div className="sidebar">
