@@ -1,12 +1,12 @@
 #include <iostream>
 #include <stdexcept>
-#include "interface.h"
+#include "iamai-core/interface.h"
 
 int main() {
     try {
         // Initialize interface with model path
         // TODO: Replace with your actual model path
-        const std::string model_path = "../../../models/tinyllama-2-1b-miniguanaco.Q4_K_M.gguf";
+        const std::string model_path = "../../../iamai-core/models/complete_model.gguf";
         Interface myInterface(model_path);
 
         // Configure generation parameters
