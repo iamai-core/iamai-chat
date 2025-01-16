@@ -1,30 +1,26 @@
+#define ASIO_STANDALONE
 #include <iostream>
 #include <stdexcept>
 #include "iamai-core/interface.h"
+#include "crow.h"
 
 int main() {
-    try {
-        // Initialize interface with model path
-        // TODO: Replace with your actual model path
-        const std::string model_path = "../../../iamai-core/models/complete_model.gguf";
-        Interface myInterface(model_path);
+    crow::SimpleApp app;
 
-        // Configure generation parameters
-        myInterface.setMaxTokens(256);     // Generate up to 256 tokens
-        myInterface.setThreads(6);        // Use 6 threads
-        myInterface.setBatchSize(1);      // Process 1 token at a time
+    // Simple GET endpoint that returns "Hello"
+    CROW_ROUTE(app, "/")([]() {
+        return "Hello from Crow!";
+    });
 
-        // Test prompt for generation
-        const std::string prompt = "Write a short story about a robot learning to paint:";
-        std::cout << "Prompt: " << prompt << std::endl << std::endl;
+    // Simple POST endpoint that echoes back the JSON it receives
+    CROW_ROUTE(app, "/test")
+    .methods("POST"_method)
+    ([](const crow::request& req) {
+        return crow::response(req.body);
+    });
 
-        // Generate text
-        std::string result = myInterface.generate(prompt);
-        std::cout << "Generated text: " << result << std::endl;
+    // Start the server on port 8080
+    app.port(8080).run();
 
-        return 0;
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
-    }
+    return 0;
 }
