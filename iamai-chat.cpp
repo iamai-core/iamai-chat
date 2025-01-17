@@ -19,7 +19,7 @@ int main()
         // Test prompt for generation
         const std::string prompt = "Write a short story about a robot learning to paint:";
         std::cout << "Prompt: " << prompt << std::endl
-                  << std::endl;
+                    << std::endl;
 
         // Generate text
         std::string result = myInterface.generate(prompt);
