@@ -1,0 +1,13 @@
+// import menu_Img from "./../src/assets/menu_btn.PNG";
+// import close_Img from "./../src/assets/close_btn.PNG";
+// import robot_Img from "./../src/assets/Robot.png";
+// import add_Img from "./../src/assets/add_btn.PNG";
+// import gear_Icon from "./../src/assets/gear_icon.PNG";
+// import file_Icon from "./../src/assets/file_inpt.PNG";
+// import img_Icon from "./../src/assets/img_inpt.PNG";
+// import vid_Icon from "./../src/assets/video_inpt.PNG";
+// import React, { useState } from "react";
+// import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
+// import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator } from '@chatscope/chat-ui-kit-react';
+// import 'bootstrap/dist/css/bootstrap.min.css';
+// import ListGroup from 'react-bootstrap/ListGroup';
