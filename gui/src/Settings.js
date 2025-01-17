@@ -1,12 +1,12 @@
-import React, { useState, Fragment, useContext } from "react";
+import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import Dropdown from 'react-bootstrap/Dropdown';
 import DropdownButton from 'react-bootstrap/DropdownButton';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import ReactSlider from "react-slider";
 import Wheel from '@uiw/react-color-wheel';
-import { hsvaToHex } from '@uiw/color-convert';
 import { AppContext } from "./App";
+import { hsvaToHex } from '@uiw/color-convert';
 
 function Settings() {
     const [selectedModel, setSelectedModel] = useState("Select a Model");
@@ -16,10 +16,16 @@ function Settings() {
 
     const navigate = useNavigate();
 
+    function generateGradient(h, s, v) {
+        const lightnessValues = [90, 70, 50, 30, 10];
+        const gradientColors = lightnessValues.map(l => `hsl(${h}, ${s}%, ${l}%)`);
+        return `linear-gradient(to left, ${gradientColors.join(', ')})`;
+    }
+
     return (
         <div>
             <div className="settings-header">
-                <button 
+                <button
                     onClick={() => navigate('/')}
                     className="back-button"
                 >
@@ -52,14 +58,36 @@ function Settings() {
             </div>
             <div className="settings-section">
                 <label htmlFor="header-color">Header Color:</label>
-                <Wheel
-                    color={hsva}
-                    onChange={(color) => {
-                        setHsva({ ...hsva, ...color.hsva });
-                        setHeaderColor(hsvaToHex(color.hsva));
+                <div className="color-wheel-container">
+                    <Wheel
+                        className="color-wheel-gradient"
+                        color={hsva}
+                        onChange={(color) => {
+                            setHsva({ ...hsva, ...color.hsva });
+                            const newGradient = generateGradient(color.hsva.h, color.hsva.s, color.hsva.v);
+                            const hexColor = hsvaToHex(color.hsva);
+                            setHeaderColor(`${newGradient}, ${hexColor}`);
+                        }}
+                        title="Gradient Color Picker"
+                    />
+                    <Wheel
+                        className="color-wheel"
+                        color={hsva}
+                        onChange={(color) => {
+                            setHsva({ ...hsva, ...color.hsva });
+                            setHeaderColor(hsvaToHex(color.hsva));
+                        }}
+                        title="Solid Color Picker"
+                    />
+                </div>
+                <div
+                    style={{
+                        width: '100%',
+                        height: 34,
+                        marginTop: 20,
+                        background: headerColor
                     }}
-                />
-                <div style={{ width: '100%', height: 34, marginTop: 20, background: hsvaToHex(hsva) }}></div>
+                ></div>
             </div>
             <div className="settings-section">
                 <label htmlFor="font-slider">Message Font Size:</label>
