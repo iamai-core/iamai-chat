@@ -16,10 +16,10 @@ body {
   height: 100vh;
 }
 
-header {
+.header {
   background-color: #1d1d1d;
   color: white;
-  padding: 10px;
+  padding: 15px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -28,6 +28,8 @@ header {
 .menu-container {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .menu {
@@ -40,30 +42,34 @@ header {
   border: none;
   border-radius: 25%;
   cursor: pointer;
+  margin-bottom: 110px;
 }
 
 .menu-btn:hover {
   background: #585858;
 }
 
-.Iamai {
-  width: 50px;
-  height: 50px;
-  margin-left: 750px;
+.iamai {
+  width: 120px;
+  height: 120px;
+  margin-left: 80px;
   align-items: center;
   background-color: #00911d;
 }
 
-.app-name {
-  font-size: 24px;
-  font-weight: bold;
-  margin-left: 750px;
+.logo {
+  width: 120px;
+  height: 120px;
+  margin-left: 15px;
+  align-items: right;
+  margin-left: 15px;
 }
 
 .chat-container {
   display: flex;
   flex-grow: 1;
   flex-direction: column;
+  background-color: #f6e1dc;
 }
 
 .chat-main {
@@ -72,6 +78,7 @@ header {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  background-color: #f6e1dc;
 }
 
 .messages-container {
@@ -121,9 +128,8 @@ header {
   font-size: 18px;
   border-radius: 25px;
   border: 1px solid #555;
-  background-color: #424242;
+  background-color: #1d1d1d;
   color: white;
-  margin-right: 10px;
 }
 
 .send-button {
@@ -161,15 +167,64 @@ header {
   background-color: #6a6a6a;
 }
 
+
+
+
 @media (max-width: 768px) {
-  .chat-container {
+  .header {
     flex-direction: column;
+    align-items: flex-start;
+    padding: 10px;
+  }
+
+  .menu-container {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .menu,
+  .iamai {
+    margin: 5px;
+  }
+
+  .app-name {
+    font-size: 20px;
+    margin-top: 10px;
   }
 
   .chat-main {
-    margin-left: 0;
     padding: 10px;
   }
+
+  .message-content {
+    font-size: 16px;
+    max-width: 90%;
+  }
+
+  .chat-input {
+    padding: 10px;
+    font-size: 16px;
+  }
+
+  .send-button {
+    padding: 8px 16px;
+    font-size: 16px;
+  }
+  .settings-header {
+    flex-direction: column;
+    align-items: center;
+}
+
+.back-button {
+    margin-bottom: 10px;
+    width: 100%;
+    max-width: 300px;
+}
+
+.settings-title {
+    margin: 0;
+    text-align: center;
+}
 }
 
 /*----------------Below is side bar css----------------------*/
@@ -291,6 +346,138 @@ header {
   font-size: 16px;
   color: #333;
 }
+
+.settings-section {
+  margin: 20px 0;
+  padding: 10px;
+  background-color: #424242;
+  border-radius: 8px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.settings-section label {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.settings-section .dropdown-toggle {
+  background-color: #575757;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 10px;
+  width: 100%;
+  text-align: left;
+}
+
+.settings-section .dropdown-menu {
+  background-color: #575757;
+  border: none;
+}
+
+.settings-section .dropdown-item {
+  color: white;
+  padding: 10px;
+}
+
+.settings-section .dropdown-item:hover {
+  background-color: #00911d;
+}
+
+.font-slider, .speed-slider {
+  width: 100%;
+  margin-top: 10px;
+  height: 25px;
+}
+
+.settings-section p {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.slider-track {
+  background: #575757;
+  top: 8px;
+  height: 4px;
+}
+
+.slider-track.slider-track-0 {
+  background: #00911d;
+}
+
+.slider-thumb {
+  background: #00911d;
+  height: 20px;
+  width: 20px;
+  border-radius: 100%;
+  cursor: pointer;
+  outline: none;
+}
+
+.slider-mark {
+  background-color: #585858;
+  height: 10px;
+  width: 10px;
+  border-radius: 50%;
+  top: 6px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.settings-title {
+  margin-left: 0;
+  flex-grow: 1;
+  text-align: center;
+}
+
+.back-button {
+  padding: 10px 20px;
+  background-color: #919191;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  background-color: #585858;
+}
+
+@media (max-width: 480px) {
+  .settings-section {
+      padding: 8px;
+  }
+
+  .settings-section label {
+      font-size: 14px;
+  }
+
+  .font-slider, .speed-slider {
+      height: 20px;
+  }
+
+  .slider-thumb {
+      height: 18px;
+      width: 18px;
+  }
+
+  .slider-mark {
+      height: 8px;
+      width: 8px;
+  }
+}
+
+
 
 /*----------------Below is attach block css----------------------*/
 
