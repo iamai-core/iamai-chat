@@ -22,11 +22,3 @@ IAMAI specializes in building AI companions that learn and grow continuously bas
 
 ## How to Contribute:
 Contributors will work alongside AI assistants like Claude to accelerate development and learning. They will be involved in tasks such as system programming, neural network training, and enhancing user interfaces, all while keeping privacy and performance in mind. Students will have the opportunity to make meaningful contributions that will reshape the AI landscape.
-
-
-## How to run the GUI project
-- Open a terminal
-- Run "npm run build"
-- Run "npm install -g serve"
-- Run "serve -s build"
-- Open localhost:3000
