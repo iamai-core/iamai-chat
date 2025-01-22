@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Dropdown from 'react-bootstrap/Dropdown';
 import DropdownButton from 'react-bootstrap/DropdownButton';
@@ -10,11 +10,57 @@ import { hsvaToHex } from '@uiw/color-convert';
 
 function Settings() {
     const [selectedModel, setSelectedModel] = useState("Select a Model");
+    const [availableModels, setAvailableModels] = useState([]);
     const [selectedRuntime, setSelectedRuntime] = useState("Select Run Time");
     const { headerColor, setHeaderColor, messageFontSize, setMessageFontSize, messageSpeed, setMessageSpeed } = useContext(AppContext);
     const [hsva, setHsva] = useState({ h: 214, s: 43, v: 90, a: 1 });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
     const navigate = useNavigate();
+
+    // Fetch available models when component mounts
+    useEffect(() => {
+        fetchModels();
+    }, []);
+
+    const fetchModels = async () => {
+        try {
+            const response = await fetch('http://localhost:8080/models');
+            if (!response.ok) {
+                throw new Error('Failed to fetch models');
+            }
+            const data = await response.json();
+            setAvailableModels(data.models);
+        } catch (err) {
+            setError('Failed to load models: ' + err.message);
+            console.error('Error fetching models:', err);
+        }
+    };
+
+    const handleModelSelect = async (modelName) => {
+        setLoading(true);
+        try {
+            const response = await fetch('http://localhost:8080/models/switch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ model: modelName }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to switch model');
+            }
+
+            setSelectedModel(modelName);
+        } catch (err) {
+            setError('Failed to switch model: ' + err.message);
+            console.error('Error switching model:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     function generateGradient(h, s, v) {
         const lightnessValues = [90, 70, 50, 30, 10];
@@ -33,18 +79,28 @@ function Settings() {
                 </button>
                 <h2 className="settings-title">Settings</h2>
             </div>
+            
             <div className="settings-section">
                 <label htmlFor="model-dropdown">Model:</label>
                 <DropdownButton
                     id="model-dropdown"
-                    title={selectedModel}
+                    title={loading ? "Loading..." : selectedModel}
                     variant="success"
+                    disabled={loading}
                 >
-                    <Dropdown.Item onClick={() => setSelectedModel("Model 1")}>Model 1</Dropdown.Item>
-                    <Dropdown.Item onClick={() => setSelectedModel("Model 2")}>Model 2</Dropdown.Item>
-                    <Dropdown.Item onClick={() => setSelectedModel("Model 3")}>Model 3</Dropdown.Item>
+                    {availableModels.map((model) => (
+                        <Dropdown.Item 
+                            key={model} 
+                            onClick={() => handleModelSelect(model)}
+                        >
+                            {model}
+                        </Dropdown.Item>
+                    ))}
                 </DropdownButton>
+                {error && <div className="error-message text-danger mt-2">{error}</div>}
             </div>
+
+            {/* Rest of your existing settings sections */}
             <div className="settings-section">
                 <label htmlFor="run-time-dropdown">Message Run Time:</label>
                 <DropdownButton
@@ -56,6 +112,7 @@ function Settings() {
                     <Dropdown.Item onClick={() => setSelectedRuntime("Instant")}>Instant</Dropdown.Item>
                 </DropdownButton>
             </div>
+            
             <div className="settings-section">
                 <label htmlFor="header-color">Header Color:</label>
                 <div className="color-wheel-container">
@@ -89,6 +146,7 @@ function Settings() {
                     }}
                 ></div>
             </div>
+
             <div className="settings-section">
                 <label htmlFor="font-slider">Message Font Size:</label>
                 <ReactSlider
@@ -105,6 +163,7 @@ function Settings() {
                 />
                 <p>Current Value: {messageFontSize}</p>
             </div>
+
             <div className="settings-section">
                 <label htmlFor="speed-slider">Text to Speech Speed:</label>
                 <ReactSlider
@@ -125,6 +184,4 @@ function Settings() {
     );
 }
 
-
 export default Settings;
-
