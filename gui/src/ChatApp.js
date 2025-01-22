@@ -30,7 +30,6 @@ function ChatApp() {
     const [isTyping, setIsTyping] = useState(false);
     const [aiStatus, setAiStatus] = useState('idle');
     const [userInput, setUserInput] = useState("");
-    //const [fileSrc, setFileSrc] = useState(null);
 
     const toggleMenu = () => setIsMenuOpen((prev) => !prev);
 
@@ -48,10 +47,8 @@ function ChatApp() {
         if (file) {
             const reader = new FileReader();// class that allows you to read files
             reader.onload = () => {
-                //setFileSrc(reader.result); // Set the image source to the data URL
                 handleSend(file, true, reader.result);
             };
-            //reader.readAsDataURL(file); // Read the file as a data URL
             reader.readAsDataURL(file)
         }
         toggleAttach();
@@ -70,7 +67,7 @@ function ChatApp() {
 
         if (isAttachment) {
             newMessage.attachment.type = renderType;
-            newMessage.message = message['name']; // Example: file name
+            newMessage.message = message['name'];
         }
 
         setMessages((prevMessages) => [...prevMessages, newMessage]);
@@ -126,10 +123,8 @@ function ChatApp() {
                         typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>
                         
                         {messages.map((message, i) => {
-                            // Check if the message has an attachment
-                            
                             if (message.attachment) {
-                                const { type, src } = message.attachment; // Assuming `attachment` has `type` and `src`
+                                const { type, src } = message.attachment;
                                 if (type === "image") {
                                     return ( <img key={i} src={src} alt="attachment" style={{ maxWidth: '30%', marginLeft: '70%' }} /> );
                                 } else if (type === "video") {
@@ -138,7 +133,6 @@ function ChatApp() {
                                     );
                                 }
                             }
-                            // Default text message
                             return <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />;})
                         }
 
