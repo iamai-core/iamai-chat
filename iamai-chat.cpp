@@ -51,7 +51,9 @@ int main(int argc, char** argv) {
         std::cout << "Tokens per second: " << 256.0 / diff.count() << std::endl;
 
         return 0;
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception &e)
+    {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }

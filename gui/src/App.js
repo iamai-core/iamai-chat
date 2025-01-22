@@ -7,12 +7,19 @@ import ChatApp from "./ChatApp";
 export const AppContext = createContext();
 
 function App() {
-  const [headerColor, setHeaderColor] = useState("#1d1d1d");
-  const [messageFontSize, setMessageFontSize] = useState(15);
-  const [messageSpeed, setMessageSpeed] = useState(5);
+  const [headerColor, setHeaderColor] = useState('#164194');
+  const [messageFontSize, setMessageFontSize] = useState(16);
+  const [messageSpeed, setMessageSpeed] = useState(1000);
 
   return (
-    <AppContext.Provider value={{ headerColor, setHeaderColor, messageFontSize, setMessageFontSize, messageSpeed, setMessageSpeed }}>
+    <AppContext.Provider value={{
+      headerColor,
+      messageFontSize,
+      messageSpeed,
+      setHeaderColor,
+      setMessageFontSize,
+      setMessageSpeed,
+    }}>
       <Router>
         <Routes>
           <Route path="/" element={<ChatApp />} />
