@@ -1,8 +1,11 @@
-// ChatApp.js
-
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import { Link } from 'react-router-dom';
 import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator } from '@chatscope/chat-ui-kit-react';
+import { AppContext } from "./App";
+import 'bootstrap/dist/css/bootstrap.min.css';
+import ListGroup from 'react-bootstrap/ListGroup';
+
+// Import your image assets here
 import menu_Img from "./assets/menu_btn.PNG";
 import logo from "./assets/iamai_logo.png";
 import idle from "./assets/iamaiidle.jpg";
@@ -15,13 +18,6 @@ import close_Img from "./../src/assets/close_btn.PNG";
 import file_Icon from "./../src/assets/file_inpt.PNG";
 import img_Icon from "./../src/assets/img_inpt.PNG";
 import vid_Icon from "./../src/assets/video_inpt.PNG";
-import { AppContext } from "./App";
-import 'bootstrap/dist/css/bootstrap.min.css';
-import ListGroup from 'react-bootstrap/ListGroup';
-
-//import * as im from "./imports" //Use im.[import] - ex: im.useState(false)
-
-var renderType = "text";
 
 function ChatApp() {
     const {
@@ -30,6 +26,10 @@ function ChatApp() {
         messageSpeed,
     } = useContext(AppContext);
 
+    // WebSocket reference
+    const wsRef = useRef(null);
+
+    // State variables
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [attachFile, setIsAttachOpen] = useState(false);
     const [messages, setMessages] = useState([]);
@@ -37,38 +37,70 @@ function ChatApp() {
     const [aiStatus, setAiStatus] = useState('idle');
     const [userInput, setUserInput] = useState("");
     const [fileSrc, setFileSrc] = useState(null);
+    const [renderType, setRenderType] = useState("");
     const [chats, setChats] = useState([{ id: 1, name: localStorage.getItem("username") + "'s Chat", messages: [], username: localStorage.getItem("username") || "" }]);
     const [currentChatId, setCurrentChatId] = useState(1);
 
+    // Initialize WebSocket connection
     useEffect(() => {
-        if (!chats[0].username) {
-            const name = prompt("Please enter your username for the default chat:");
-            if (name) {
-                setChats(chats.map(chat => chat.id === 1 ? { ...chat, username: name } : chat));
-                localStorage.setItem("username", name);
+        wsRef.current = new WebSocket('ws://localhost:8080/ws');
+
+        wsRef.current.onopen = () => {
+            console.log('WebSocket Connected');
+        };
+
+        wsRef.current.onmessage = (event) => {
+            const aiResponse = {
+                message: event.data,
+                direction: 'incoming',
+                sender: "AI"
+            };
+
+            setIsTyping(false);
+            setChats((prevChats) => prevChats.map(chat =>
+                chat.id === currentChatId ?
+                    { ...chat, messages: [...chat.messages, aiResponse] } :
+                    chat
+            ));
+            setAiStatus('speaking');
+            setTimeout(() => setAiStatus('idle'), 1000);
+        };
+
+        wsRef.current.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        wsRef.current.onclose = () => {
+            console.log('WebSocket disconnected');
+        };
+
+        // Cleanup on component unmount
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
             }
-        }
-    }, [chats]);
+        };
+    }, [currentChatId]);
 
     const toggleMenu = () => setIsMenuOpen((prev) => !prev);
 
     const toggleAttach = () => setIsAttachOpen((prev) => !prev);
 
-    function setRenderType(file) {
-        renderType = file['type'];
-        renderType = renderType.split('/')[0].toLowerCase()
-        console.log(renderType);
+    const updateFileType = (file) => {
+        const fileType = file['type'].split('/')[0].toLowerCase();
+        setRenderType(fileType);
+        console.log(fileType);
     };
 
     function HandleFileChange(event) {
         const file = event.target.files[0];
-        setRenderType(file);
         if (file) {
-            const reader = new FileReader();// class that allows you to read files
+            updateFileType(file);
+            const reader = new FileReader();
             reader.onload = () => {
-                setFileSrc(reader.result); // Set the image source to the data URL
+                setFileSrc(reader.result);
             };
-            reader.readAsDataURL(file); // Read the file as a data URL
+            reader.readAsDataURL(file);
         }
 
         handleSend(event, true);
@@ -81,41 +113,27 @@ function ChatApp() {
             direction: 'outgoing',
             sender: "user"
         };
-        // const file = message.target.files[0];
 
-        // if (file && isAttachment === true) {
-        //     const reader = new FileReader();// class that allows you to read files
-        //     reader.onload = () => {
-        //         setFileSrc(reader.result); // Set the image source to the data URL
-        //     };
-        //     newMessage.message = reader.readAsDataURL(file); // Read the file as a data URL
-        // }
+        if (isAttachment === true) {
+            newMessage.message = message.target.files[0]['name'];
+        }
 
-        if (isAttachment === true) newMessage.message = message.target.files[0]['name']; // Can use ['name'], ['type'], ['size']
         setChats((prevChats) => prevChats.map(chat =>
             chat.id === currentChatId ?
                 { ...chat, messages: [...chat.messages, newMessage] } :
                 chat
         ));
+
         setUserInput("");
         setIsTyping(true);
         setAiStatus('thinking');
-        // Simulate AI response
-        setTimeout(() => {
-            setIsTyping(false);
-            const aiResponse = {
-                message: "AI's response here",
-                direction: 'incoming',
-                sender: "AI"
-            };
-            setChats((prevChats) => prevChats.map(chat =>
-                chat.id === currentChatId ?
-                    { ...chat, messages: [...chat.messages, aiResponse] } :
-                    chat
-            ));
-            setAiStatus('speaking');
-            setTimeout(() => setAiStatus('idle'), 1000);
-        }, messageSpeed);
+
+        // Send message through WebSocket
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(isAttachment ? newMessage.message : message);
+        } else {
+            console.error('WebSocket is not connected');
+        }
     };
 
     const getAiImage = () => {
@@ -179,7 +197,7 @@ function ChatApp() {
                     </MessageList>
                     <MessageInput
                         className="chat-input"
-                        placeholder="What’s on your mind?"
+                        placeholder="What's on your mind?"
                         value={userInput}
                         onChange={handleInputChange}
                         onSend={(message) => handleSend(message)}
@@ -191,7 +209,6 @@ function ChatApp() {
             </MainContainer>
 
             {/* Overlay Screen */}
-
             {isMenuOpen && (
                 <div className="sidebar-overlay">
                     <div className="sidebar">
@@ -256,6 +273,5 @@ function ChatApp() {
         </div>
     );
 }
-
 
 export default ChatApp;
