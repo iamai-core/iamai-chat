@@ -1,6 +1,6 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import { Link } from 'react-router-dom';
-import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator, MessageListContent } from '@chatscope/chat-ui-kit-react';
+import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator } from '@chatscope/chat-ui-kit-react';
 import menu_Img from "./assets/menu_btn.PNG";
 import logo from "./assets/iamai_logo.png"
 import idle from "./assets/iamaiidle.jpg";
@@ -17,7 +17,6 @@ import { AppContext } from "./App";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import ListGroup from 'react-bootstrap/ListGroup';
 
-
 //import * as im from "./imports" //Use im.[import] - ex: im.useState(false)
 
 var renderType = "text";
@@ -30,11 +29,41 @@ function ChatApp() {
     const [isTyping, setIsTyping] = useState(false);
     const [aiStatus, setAiStatus] = useState('idle');
     const [userInput, setUserInput] = useState("");
+    const [isConnected, setIsConnected] = useState(false);
+    const wsRef = useRef(null);
 
+    useEffect(() => {
+        wsRef.current = new WebSocket('ws://localhost:8080/ws');
+
+        wsRef.current.onopen = () => {
+            setIsConnected(true);
+        };
+
+        wsRef.current.onmessage = (event) => {
+            setIsTyping(false);
+            setMessages(prevMessages => [...prevMessages, {
+                message: event.data,
+                direction: 'incoming',
+                sender: "AI"
+            }]);
+            setAiStatus('speaking');
+            setTimeout(() => setAiStatus('idle'), 1000);
+        };
+
+        wsRef.current.onclose = () => {
+            setIsConnected(false);
+        };
+
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+        };
+    }, []);
+    
     const toggleMenu = () => setIsMenuOpen((prev) => !prev);
-
     const toggleAttach = () => setIsAttachOpen((prev) => !prev);
-
+  
     function setRenderType(file) {
         renderType = file['type'];
         renderType = renderType.split('/')[0].toLowerCase()
@@ -53,7 +82,8 @@ function ChatApp() {
         }
         toggleAttach();
     }
-
+    
+    
     const handleSend = async (message, isAttachment = false, Src = null) => {
         const newMessage = {
             message,
@@ -72,7 +102,7 @@ function ChatApp() {
 
         setMessages((prevMessages) => [...prevMessages, newMessage]);
         setUserInput("");
-        //setIsTyping(true);
+        setIsTyping(true);
         setAiStatus('thinking');
         // setTimeout(() => {
         //     setIsTyping(false);
@@ -80,6 +110,23 @@ function ChatApp() {
         //     setAiStatus('speaking');
         //     setTimeout(() => setAiStatus('idle'), 1000);
         // }, messageSpeed);
+      
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            try {
+                wsRef.current.send(message);
+            } catch (error) {
+                setIsTyping(false);
+                setAiStatus('idle');
+            }
+        } else {
+            setIsTyping(false);
+            setMessages(prevMessages => [...prevMessages, {
+                message: "Sorry, I'm currently disconnected. Please try again later.",
+                direction: 'incoming',
+                sender: "AI"
+            }]);
+            setAiStatus('idle');
+        }
     };
 
 
@@ -114,14 +161,18 @@ function ChatApp() {
                     </button>
                     <img className="iamai" src={getAiImage()} alt="Iamai" />
                     <img className="logo" src={logo} alt="Logo" />
+                    {!isConnected && (
+                        <div className="connection-status">
+                            Disconnected
+                        </div>
+                    )}
                 </div>
             </header>
             <MainContainer className="chat-main">
                 <ChatContainer className="chat-container">
                     <MessageList
                         scrollBehavior="smooth"
-                        typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>
-                        
+                        typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>                        
                         {messages.map((message, i) => {
                             if (message.attachment) {
                                 const { type, src } = message.attachment;
@@ -135,15 +186,15 @@ function ChatApp() {
                             }
                             return <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />;})
                         }
-
-                        </MessageList>
+                        
+                    </MessageList>
                     <MessageInput
                         className="chat-input"
                         placeholder="What’s on your mind?"
                         value={userInput}
                         onChange={handleInputChange}
-                        onSend={(message) => handleSend(message)}
-                        disabled={isTyping}
+                        onSend={handleSend}
+                        disabled={isTyping || !isConnected}
                         style={{ fontSize: `${messageFontSize}px` }}
                         onAttachClick={toggleAttach}
                     />
@@ -151,7 +202,6 @@ function ChatApp() {
             </MainContainer>
 
             {/* Overlay Screen */}
-
             {isMenuOpen && (
                 <div className="sidebar-overlay">
                     <div className="sidebar">
@@ -207,6 +257,5 @@ function ChatApp() {
         </div>
     );
 }
-
 
 export default ChatApp;
