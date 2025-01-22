@@ -1,3 +1,0 @@
-## GUI
-
-### Build Instructions
