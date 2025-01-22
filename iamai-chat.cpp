@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
         std::cout << "Starting model initialization...\n" << std::endl;
 
         // Initialize interface with model path
-        const std::string model_path = "../../../iamai-core/models/Llama-3.2-1B-Instruct-Q4_K_M.gguf";
+        const std::string model_path = "../../../models/Llama-3.2-1B-Instruct-Q4_K_M.gguf";
         Interface myInterface(model_path);
 
         // Configure generation parameters
@@ -68,24 +68,24 @@ int main(int argc, char** argv) {
 
 // int main() {
 //     crow::SimpleApp app;
-   
+
 //     // Initialize the AI interface
 //     std::unique_ptr<Interface> ai;
 //     try {
 //         fs::path model_path = fs::absolute("../../../iamai-core/models/Llama-3.2-1B-Instruct-Q4_K_M.gguf");
 //         std::cout << "Loading model from: " << model_path << std::endl;
 //         ai = std::make_unique<Interface>(model_path.string());
-       
+
 //         // Configure the model parameters if needed
 //         ai->setMaxTokens(128);  // Adjust based on your needs
 //         ai->setThreads(4);      // Adjust based on your hardware
 //         ai->setBatchSize(32);    // Adjust based on your needs
-       
+
 //     } catch (const std::exception& e) {
 //         std::cerr << "Failed to initialize AI: " << e.what() << std::endl;
 //         return 1;
 //     }
-   
+
 //     // WebSocket endpoint
 //     CROW_WEBSOCKET_ROUTE(app, "/ws")
 //         .onopen([](crow::websocket::connection& conn) {
