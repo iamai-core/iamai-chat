@@ -1,8 +1,8 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import { Link } from 'react-router-dom';
 import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator } from '@chatscope/chat-ui-kit-react';
 import menu_Img from "./assets/menu_btn.PNG";
-import logo from "./assets/iamai_logo.png";
+import logo from "./assets/iamai_logo.png"
 import idle from "./assets/iamaiidle.jpg";
 import listening from "./assets/iamailistening.jpg";
 import speaking from "./assets/iamaispeaking.jpg";
@@ -20,51 +20,80 @@ import ListGroup from 'react-bootstrap/ListGroup';
 var renderType = "text";
 
 function ChatApp() {
-    const {
-        headerColor,
-        messageFontSize,
-        messageSpeed,
-    } = useContext(AppContext);
-
+    const { headerColor, messageFontSize, messageSpeed } = useContext(AppContext);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [attachFile, setIsAttachOpen] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const [aiStatus, setAiStatus] = useState('idle');
     const [userInput, setUserInput] = useState("");
+    const [isConnected, setIsConnected] = useState(false);
+    const wsRef = useRef(null);
+
+    useEffect(() => {
+        wsRef.current = new WebSocket('ws://localhost:8080/ws');
+
+        wsRef.current.onopen = () => {
+            setIsConnected(true);
+        };
     const [fileSrc, setFileSrc] = useState(null);
     const [chats, setChats] = useState([]);
     const [currentChatId, setCurrentChatId] = useState(1);
-
     const toggleMenu = () => setIsMenuOpen((prev) => !prev);
 
-    const toggleAttach = () => setIsAttachOpen((prev) => !prev);
+        wsRef.current.onmessage = (event) => {
+            setIsTyping(false);
+            setMessages(prevMessages => [...prevMessages, {
+                message: event.data,
+                direction: 'incoming',
+                sender: "AI"
+            }]);
+            setAiStatus('speaking');
+            setTimeout(() => setAiStatus('idle'), 1000);
+        };
 
+        wsRef.current.onclose = () => {
+            setIsConnected(false);
+        };
+
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+        };
+    }, []);
+    
+    const toggleMenu = () => setIsMenuOpen((prev) => !prev);
+    const toggleAttach = () => setIsAttachOpen((prev) => !prev);
+  
     function setRenderType(file) {
         renderType = file['type'];
         renderType = renderType.split('/')[0].toLowerCase()
         console.log(renderType);
     };
 
-    function HandleFileChange(event) {
+    const HandleFileChange = (event) => {
         const file = event.target.files[0];
         setRenderType(file);
         if (file) {
             const reader = new FileReader();// class that allows you to read files
             reader.onload = () => {
-                setFileSrc(reader.result); // Set the image source to the data URL
+                handleSend(file, true, reader.result);
             };
-            reader.readAsDataURL(file); // Read the file as a data URL
+            reader.readAsDataURL(file)
         }
-
-        handleSend(event, true);
         toggleAttach();
     }
-
-    const handleSend = async (message, isAttachment = false) => {
+    
+    
+    const handleSend = async (message, isAttachment = false, Src = null) => {
         const newMessage = {
             message,
             direction: 'outgoing',
-            sender: "user"
+            sender: "user",
+            attachment: {
+                type: "text",
+                src: Src
+            }
         };
 
         if (isAttachment === true) newMessage.message = message.target.files[0]['name']; // Can use ['name'], ['type'], ['size']
@@ -76,11 +105,24 @@ function ChatApp() {
         setUserInput("");
         setIsTyping(true);
         setAiStatus('thinking');
-        // Simulate AI response
-        setTimeout(() => {
+        // setTimeout(() => {
+        //     setIsTyping(false);
+        //     setMessages((prevMessages) => [...prevMessages, { message: "AI's response here", direction: 'incoming', sender: "AI" }]);
+        //     setAiStatus('speaking');
+        //     setTimeout(() => setAiStatus('idle'), 1000);
+        // }, messageSpeed);
+      
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            try {
+                wsRef.current.send(message);
+            } catch (error) {
+                setIsTyping(false);
+                setAiStatus('idle');
+            }
+        } else {
             setIsTyping(false);
-            const aiResponse = {
-                message: "AI's response here",
+            setMessages(prevMessages => [...prevMessages, {
+                message: "Sorry, I'm currently disconnected. Please try again later.",
                 direction: 'incoming',
                 sender: "AI"
             };
@@ -93,6 +135,7 @@ function ChatApp() {
             setTimeout(() => setAiStatus('idle'), 1000);
         }, messageSpeed);
     };
+
 
     const getAiImage = () => {
         switch (aiStatus) {
@@ -130,35 +173,49 @@ function ChatApp() {
             setCurrentChatId(newChatId);
         }
     };
-
     return (
-        <div className="chat-app">
-            <header className="header" style={{ background: headerColor }}>
+        <div className="chat-app" style={{ backgroundColor: headerColor }}>
+            <header className="header" style={{ backgroundColor: headerColor }}>
                 <div className="menu-container">
                     <button className="menu-btn" onClick={toggleMenu} type="button">
                         <img className="menu" src={menu_Img} alt="menu" />
                     </button>
                     <img className="iamai" src={getAiImage()} alt="Iamai" />
                     <img className="logo" src={logo} alt="Logo" />
+                    {!isConnected && (
+                        <div className="connection-status">
+                            Disconnected
+                        </div>
+                    )}
                 </div>
             </header>
             <MainContainer className="chat-main">
                 <ChatContainer className="chat-container">
                     <MessageList
                         scrollBehavior="smooth"
-                        typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}
-                    >
-                        {chats.find(chat => chat.id === currentChatId)?.messages.map((message, i) => (
-                            <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />
-                        ))}
+                        typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>                        
+                        {messages.map((message, i) => {
+                            if (message.attachment) {
+                                const { type, src } = message.attachment;
+                                if (type === "image") {
+                                    return ( <img key={i} src={src} alt="attachment" style={{ maxWidth: '30%', marginLeft: '70%' }} /> );
+                                } else if (type === "video") {
+                                    return (
+                                        <video key={i} src={src} controls style={{ maxWidth: '30%', marginLeft: '70%' }} />
+                                    );
+                                }
+                            }
+                            return <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />;})
+                        }
+                        
                     </MessageList>
                     <MessageInput
                         className="chat-input"
                         placeholder="What’s on your mind?"
                         value={userInput}
                         onChange={handleInputChange}
-                        onSend={(message) => handleSend(message)}
-                        disabled={isTyping}
+                        onSend={handleSend}
+                        disabled={isTyping || !isConnected}
                         style={{ fontSize: `${messageFontSize}px` }}
                         onAttachClick={toggleAttach}
                     />
@@ -166,7 +223,6 @@ function ChatApp() {
             </MainContainer>
 
             {/* Overlay Screen */}
-
             {isMenuOpen && (
                 <div className="sidebar-overlay">
                     <div className="sidebar">
@@ -174,23 +230,14 @@ function ChatApp() {
                             <button className="close-menu" onClick={toggleMenu} type="button">
                                 <img src={menu_Img} alt="close" />
                             </button>
-                            <button className="add-button" onClick={addNewChat}>
+                            <button className="add-button">
                                 <img src={add_Img} alt="Add" />
                             </button>
                         </nav>
                         <hr className="divider" />
                         <div className="profile-section">
                             <div className="profile-circle"></div>
-                            <div className="profile-name">
-                                {chats.find(chat => chat.id === currentChatId)?.username}
-                            </div>
-                        </div>
-                        <div className="chat-list">
-                            {chats.map(chat => (
-                                <div key={chat.id} className={`chat-item ${chat.id === currentChatId ? 'active' : ''}`} onClick={() => setCurrentChatId(chat.id)}>
-                                    {chat.name}
-                                </div>
-                            ))}
+                            <div className="profile-name">John Doe</div>
                         </div>
                         <Link to="/settings" className="settings-button">
                             <img src={gear_Icon} alt="Settings Icon" />
@@ -231,5 +278,4 @@ function ChatApp() {
         </div>
     );
 }
-
 export default ChatApp;

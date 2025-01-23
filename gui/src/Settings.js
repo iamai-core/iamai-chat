@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Dropdown from 'react-bootstrap/Dropdown';
 import DropdownButton from 'react-bootstrap/DropdownButton';
@@ -10,12 +10,97 @@ import { hsvaToHex } from '@uiw/color-convert';
 
 function Settings() {
     const [selectedModel, setSelectedModel] = useState("Select a Model");
+    const [availableModels, setAvailableModels] = useState([]);
     const [selectedRuntime, setSelectedRuntime] = useState("Select Run Time");
     const { headerColor, setHeaderColor, messageFontSize, setMessageFontSize, messageSpeed, setMessageSpeed } = useContext(AppContext);
     const [hsva, setHsva] = useState({ h: 214, s: 43, v: 90, a: 1 });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
     const navigate = useNavigate();
+    // Fetch available models when component mounts
+    useEffect(() => {
+        fetchModels();
+    }, []);
 
+    const fetchModels = async () => {
+        console.log('Fetching models...');
+        try {
+            console.log('Making GET request to /models');
+            const response = await fetch('http://localhost:8080/models', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                mode: 'cors'
+            });
+            
+            console.log('Response status:', response.status);
+            console.log('Response headers:', Object.fromEntries([...response.headers]));
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+            }
+            
+            const text = await response.text();
+            console.log('Raw response:', text);
+            
+            const data = JSON.parse(text);
+            console.log('Parsed response:', data);
+            
+            if (data && Array.isArray(data.models)) {
+                setAvailableModels(data.models);
+                if (data.models.length > 0 && selectedModel === "Select a Model") {
+                    setSelectedModel(data.models[0]);
+                }
+            } else {
+                console.error('Invalid data format:', data);
+                throw new Error('Invalid data format received from server');
+            }
+        } catch (err) {
+            const errorMessage = 'Failed to load models: ' + err.message;
+            setError(errorMessage);
+            console.error(errorMessage);
+        }
+    };
+    
+    const handleModelSelect = async (modelName) => {
+        console.log('Switching to model:', modelName);
+        setLoading(true);
+        setError(null);
+        
+        try {
+            const response = await fetch('http://localhost:8080/models/switch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ model: modelName }),
+            });
+            
+            console.log('Switch model response status:', response.status);
+            
+            const result = await response.json();
+            console.log('Switch model result:', result);
+    
+            if (!response.ok) {
+                throw new Error(result.error || `Failed to switch model: ${response.status}`);
+            }
+    
+            setSelectedModel(modelName);
+            setError(null);
+        } catch (err) {
+            const errorMessage = 'Failed to switch model: ' + (err.message || 'Unknown error');
+            setError(errorMessage);
+            console.error(errorMessage);
+            // Reset selected model if switch failed
+            await fetchModels();
+        } finally {
+            setLoading(false);
+        }
+    };
     // Generate gradient for header color
     function generateGradient(h, s, v) {
         const lightnessValues = [90, 70, 50, 30, 10];
@@ -29,16 +114,45 @@ function Settings() {
                 <button onClick={() => navigate('/')} className="back-button">Back to Main Page</button>
                 <h2 className="settings-title">Settings</h2>
             </div>
-
-            {/* Model Dropdown */}
+            
             <div className="settings-section">
                 <label htmlFor="model-dropdown">Model:</label>
-                <DropdownButton id="model-dropdown" title={selectedModel} variant="success">
-                    <Dropdown.Item onClick={() => setSelectedModel("Model 1")}>Model 1</Dropdown.Item>
-                    <Dropdown.Item onClick={() => setSelectedModel("Model 2")}>Model 2</Dropdown.Item>
-                    <Dropdown.Item onClick={() => setSelectedModel("Model 3")}>Model 3</Dropdown.Item>
-                </DropdownButton>
+                <div>
+                    <DropdownButton
+                        id="model-dropdown"
+                        title={loading ? "Loading..." : selectedModel}
+                        variant="success"
+                        disabled={loading}
+                    >
+                        {availableModels.map((model) => (
+                            <Dropdown.Item 
+                                key={model} 
+                                onClick={() => handleModelSelect(model)}
+                                active={model === selectedModel}
+                            >
+                                {model}
+                            </Dropdown.Item>
+                        ))}
+                    </DropdownButton>
+                    {loading && <div className="text-info mt-2">Loading...</div>}
+                    {error && (
+                        <div className="text-danger mt-2">
+                            {error}
+                            <button 
+                                className="btn btn-link p-0 ml-2"
+                                onClick={fetchModels}
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    )}
+                    <div className="text-muted mt-1">
+                        Available models: {availableModels.length > 0 ? availableModels.join(', ') : 'None found'}
+                    </div>
+                </div>
             </div>
+
+            {/* Rest of your existing settings sections */}
 
             {/* Runtime Dropdown */}
             <div className="settings-section">
@@ -83,7 +197,6 @@ function Settings() {
                     }}
                 ></div>
             </div>
-
             {/* Font Size Slider */}
             <div className="settings-section">
                 <label htmlFor="font-slider">Message Font Size:</label>
@@ -101,7 +214,6 @@ function Settings() {
                 />
                 <p>Current Value: {messageFontSize}</p>
             </div>
-
             {/* Speed Slider */}
             <div className="settings-section">
                 <label htmlFor="speed-slider">Text to Speech Speed:</label>
@@ -122,5 +234,4 @@ function Settings() {
         </div>
     );
 }
-
 export default Settings;
