@@ -25,38 +25,75 @@ function Settings() {
     }, []);
 
     const fetchModels = async () => {
+        console.log('Fetching models...');
         try {
-            const response = await fetch('http://localhost:8080/models');
+            const response = await fetch('http://localhost:8080/models', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                mode: 'cors'
+            });
+            
+            console.log('Response headers:', response.headers);
+            console.log('Response status:', response.status);
+            
             if (!response.ok) {
-                throw new Error('Failed to fetch models');
+                throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
             }
+            
             const data = await response.json();
-            setAvailableModels(data.models);
+            console.log('Received models:', data);
+            
+            if (data && Array.isArray(data.models)) {
+                setAvailableModels(data.models);
+                if (data.models.length > 0 && selectedModel === "Select a Model") {
+                    setSelectedModel(data.models[0]);
+                }
+            } else {
+                console.error('Invalid data format:', data);
+                throw new Error('Invalid data format received from server');
+            }
         } catch (err) {
-            setError('Failed to load models: ' + err.message);
-            console.error('Error fetching models:', err);
+            const errorMessage = 'Failed to load models: ' + err.message;
+            setError(errorMessage);
+            console.error(errorMessage);
         }
     };
-
+    
     const handleModelSelect = async (modelName) => {
+        console.log('Switching to model:', modelName);
         setLoading(true);
+        setError(null);
+        
         try {
             const response = await fetch('http://localhost:8080/models/switch', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                 },
                 body: JSON.stringify({ model: modelName }),
             });
-
+            
+            console.log('Switch model response status:', response.status);
+            
+            const result = await response.json();
+            console.log('Switch model result:', result);
+    
             if (!response.ok) {
-                throw new Error('Failed to switch model');
+                throw new Error(result.error || `Failed to switch model: ${response.status}`);
             }
-
+    
             setSelectedModel(modelName);
+            setError(null);
         } catch (err) {
-            setError('Failed to switch model: ' + err.message);
-            console.error('Error switching model:', err);
+            const errorMessage = 'Failed to switch model: ' + (err.message || 'Unknown error');
+            setError(errorMessage);
+            console.error(errorMessage);
+            // Reset selected model if switch failed
+            await fetchModels();
         } finally {
             setLoading(false);
         }
@@ -82,22 +119,39 @@ function Settings() {
             
             <div className="settings-section">
                 <label htmlFor="model-dropdown">Model:</label>
-                <DropdownButton
-                    id="model-dropdown"
-                    title={loading ? "Loading..." : selectedModel}
-                    variant="success"
-                    disabled={loading}
-                >
-                    {availableModels.map((model) => (
-                        <Dropdown.Item 
-                            key={model} 
-                            onClick={() => handleModelSelect(model)}
-                        >
-                            {model}
-                        </Dropdown.Item>
-                    ))}
-                </DropdownButton>
-                {error && <div className="error-message text-danger mt-2">{error}</div>}
+                <div>
+                    <DropdownButton
+                        id="model-dropdown"
+                        title={loading ? "Loading..." : selectedModel}
+                        variant="success"
+                        disabled={loading}
+                    >
+                        {availableModels.map((model) => (
+                            <Dropdown.Item 
+                                key={model} 
+                                onClick={() => handleModelSelect(model)}
+                                active={model === selectedModel}
+                            >
+                                {model}
+                            </Dropdown.Item>
+                        ))}
+                    </DropdownButton>
+                    {loading && <div className="text-info mt-2">Loading...</div>}
+                    {error && (
+                        <div className="text-danger mt-2">
+                            {error}
+                            <button 
+                                className="btn btn-link p-0 ml-2"
+                                onClick={fetchModels}
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    )}
+                    <div className="text-muted mt-1">
+                        Available models: {availableModels.length > 0 ? availableModels.join(', ') : 'None found'}
+                    </div>
+                </div>
             </div>
 
             {/* Rest of your existing settings sections */}

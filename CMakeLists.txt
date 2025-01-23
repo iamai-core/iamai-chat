@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(iamai-chat C CXX)
 
-# Set C/C++ standards before anything else
+# Set C/C++ standards
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
@@ -10,9 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Keep existing output directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-
-
-# Copy CUDA DLLs from CUDA installation directory to output directory
+# Copy CUDA DLLs
 set(CUDA_DLL_VERSION "12")
 add_custom_target(copy_cuda_dlls ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>
@@ -29,11 +27,8 @@ set(GGML_CUDA ON CACHE BOOL "Enable CUDA" FORCE)
 set(GGML_METAL OFF CACHE BOOL "disable Metal" FORCE)
 set(GGML_OPENBLAS OFF CACHE BOOL "disable OpenBLAS" FORCE)
 
-# Your existing llama.cpp subdirectory
+# Add llama.cpp subdirectory
 add_subdirectory(${CMAKE_SOURCE_DIR}/iamai-core/llama.cpp ${CMAKE_BINARY_DIR}/llama.cpp)
-#add_subdirectory(iamai-core/llama.cpp)
-
-
 
 # Windows specific settings for Crow/ASIO
 if(WIN32)
@@ -46,12 +41,22 @@ endif()
 add_library(Crow INTERFACE)
 target_include_directories(Crow INTERFACE ${CMAKE_SOURCE_DIR}/include)
 
-
+# Find required Windows libraries
+find_library(SHELL32_LIBRARY Shell32)
+find_library(OLE32_LIBRARY Ole32)
 
 # Create the executable
 add_executable(iamai-chat
     iamai-chat.cpp
     iamai-core/core/interface.cpp
+    iamai-core/core/folder_manager.cpp
+)
+
+# Add include directories
+target_include_directories(iamai-chat
+    PUBLIC
+    ${CMAKE_SOURCE_DIR}/include  # For Crow headers
+    ${CMAKE_SOURCE_DIR}/iamai-core  # For iamai-core headers
 )
 
 # Link all libraries
@@ -59,25 +64,21 @@ target_link_libraries(iamai-chat
     PRIVATE
     llama
     Crow
+    ${SHELL32_LIBRARY}
+    ${OLE32_LIBRARY}
+    Threads::Threads
 )
 
-# Add include directories
-target_include_directories(iamai-chat
-    PUBLIC
-    ${CMAKE_SOURCE_DIR}/include  # For Crow headers
-)
-
-# Find and link threads (required for ASIO/Crow)
+# Find and link threads
 find_package(Threads REQUIRED)
-target_link_libraries(iamai-chat PRIVATE Threads::Threads)
 
-# Optional: Add OpenSSL if you need HTTPS support
+# Optional: Add OpenSSL if needed
 find_package(OpenSSL)
 if(OpenSSL_FOUND)
     target_link_libraries(iamai-chat PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
-# Set additional compiler flags if needed
+# Set additional compiler flags
 if(MSVC)
     target_compile_options(iamai-chat PRIVATE /W4)
 else()

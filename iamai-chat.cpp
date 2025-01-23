@@ -4,12 +4,18 @@
 #include "crow.h"
 #include "iamai-core/core/folder_manager.h"
 #include "iamai-core/core/model_manager.h"
-
 using namespace iamai;
+
+void add_cors_headers(crow::response& res) {
+    std::cout << "Adding CORS headers..." << std::endl;
+    res.add_header("Access-Control-Allow-Origin", "*");
+    res.add_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.add_header("Access-Control-Allow-Headers", "Content-Type, Accept");
+}
 
 int main() {
     crow::SimpleApp app;
-    
+   
     // Initialize the folder structure
     try {
         auto& folder_manager = FolderManager::getInstance();
@@ -25,13 +31,10 @@ int main() {
     std::unique_ptr<ModelManager> model_manager;
     try {
         model_manager = std::make_unique<ModelManager>();
-        
-        // Get available models
         auto models = model_manager->listModels();
         if (models.empty()) {
             std::cout << "No models found in models directory" << std::endl;
         } else {
-            // Load the first available model as default
             if (!model_manager->switchModel(models[0])) {
                 throw std::runtime_error("Failed to load default model");
             }
@@ -41,30 +44,57 @@ int main() {
         return 1;
     }
 
-    // REST endpoint for listing models
-    CROW_ROUTE(app, "/models")
-    .methods("GET"_method)
-    ([&model_manager]() {
-        crow::json::wvalue response;
-        response["models"] = model_manager->listModels();
-        return response;
+    // OPTIONS handler for /models
+    CROW_ROUTE(app, "/models").methods("OPTIONS"_method)([](const crow::request& req) {
+        crow::response res;
+        add_cors_headers(res);
+        res.code = 204;
+        return res;
     });
 
-    // REST endpoint for switching models
-    CROW_ROUTE(app, "/models/switch")
-    .methods("POST"_method)
-    ([&model_manager](const crow::request& req) {
+    // GET handler for /models
+    CROW_ROUTE(app, "/models").methods("GET"_method)([&model_manager]() {
+        std::cout << "Handling GET /models request" << std::endl;
+        crow::response res;
+        crow::json::wvalue response_body;
+        response_body["models"] = model_manager->listModels();
+        res.write(response_body.dump());
+        res.code = 200;
+        res.set_header("Content-Type", "application/json");
+        add_cors_headers(res);
+        return res;
+    });
+
+    // OPTIONS handler for /models/switch
+    CROW_ROUTE(app, "/models/switch").methods("OPTIONS"_method)([](const crow::request& req) {
+        crow::response res;
+        add_cors_headers(res);
+        res.code = 204;
+        return res;
+    });
+
+    // POST handler for /models/switch
+    CROW_ROUTE(app, "/models/switch").methods("POST"_method)([&model_manager](const crow::request& req) {
+        crow::response res;
+        add_cors_headers(res);
+        res.set_header("Content-Type", "application/json");
+
         auto x = crow::json::load(req.body);
         if (!x) {
-            return crow::response(400, "Invalid JSON");
+            res.code = 400;
+            res.write("{\"error\": \"Invalid JSON\"}");
+            return res;
         }
         
         std::string model_name = x["model"].s();
         if (model_manager->switchModel(model_name)) {
-            return crow::response(200, "Model switched successfully");
+            res.code = 200;
+            res.write("{\"message\": \"Model switched successfully\"}");
         } else {
-            return crow::response(400, "Failed to switch model");
+            res.code = 400;
+            res.write("{\"error\": \"Failed to switch model\"}");
         }
+        return res;
     });
 
     // WebSocket endpoint
@@ -77,7 +107,6 @@ int main() {
             }
         })
         .onclose([](crow::websocket::connection& conn, const std::string& reason) {
-            // Connection cleanup if needed
         })
         .onmessage([&model_manager](crow::websocket::connection& conn, const std::string& data, bool is_binary) {
             try {
@@ -91,6 +120,7 @@ int main() {
             }
         });
 
+    std::cout << "Starting server on port 8080..." << std::endl;
     app.port(8080).run();
     return 0;
 }
