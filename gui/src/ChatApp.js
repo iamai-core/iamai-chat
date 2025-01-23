@@ -18,6 +18,16 @@ import close_Img from "./../src/assets/close_btn.PNG";
 import file_Icon from "./../src/assets/file_inpt.PNG";
 import img_Icon from "./../src/assets/img_inpt.PNG";
 import vid_Icon from "./../src/assets/video_inpt.PNG";
+<<<<<<< HEAD
+=======
+import { AppContext } from "./App";
+import 'bootstrap/dist/css/bootstrap.min.css';
+import ListGroup from 'react-bootstrap/ListGroup';
+
+//import * as im from "./imports" //Use im.[import] - ex: im.useState(false)
+
+var renderType = "text";
+>>>>>>> 30309fd424d32993eca489b06474991e5a5a3174
 
 function ChatApp() {
     const {
@@ -36,12 +46,18 @@ function ChatApp() {
     const [isTyping, setIsTyping] = useState(false);
     const [aiStatus, setAiStatus] = useState('idle');
     const [userInput, setUserInput] = useState("");
+<<<<<<< HEAD
     const [fileSrc, setFileSrc] = useState(null);
     const [renderType, setRenderType] = useState("");
     const [chats, setChats] = useState([{ id: 1, name: localStorage.getItem("username") + "'s Chat", messages: [], username: localStorage.getItem("username") || "" }]);
     const [currentChatId, setCurrentChatId] = useState(1);
 
     // Initialize WebSocket connection
+=======
+    const [isConnected, setIsConnected] = useState(false);
+    const wsRef = useRef(null);
+
+>>>>>>> 30309fd424d32993eca489b06474991e5a5a3174
     useEffect(() => {
         wsRef.current = new WebSocket('ws://localhost:8080/ws');
 
@@ -80,10 +96,23 @@ function ChatApp() {
                 wsRef.current.close();
             }
         };
+<<<<<<< HEAD
     }, [currentChatId]);
 
+=======
+    }, []);
+    
+>>>>>>> 30309fd424d32993eca489b06474991e5a5a3174
     const toggleMenu = () => setIsMenuOpen((prev) => !prev);
+    const toggleAttach = () => setIsAttachOpen((prev) => !prev);
+  
+    function setRenderType(file) {
+        renderType = file['type'];
+        renderType = renderType.split('/')[0].toLowerCase()
+        console.log(renderType);
+    };
 
+<<<<<<< HEAD
     const toggleAttach = () => setIsAttachOpen((prev) => !prev);
 
     const updateFileType = (file) => {
@@ -108,12 +137,34 @@ function ChatApp() {
     }
 
     const handleSend = async (message, isAttachment = false) => {
+=======
+    const HandleFileChange = (event) => {
+        const file = event.target.files[0];
+        setRenderType(file);
+        if (file) {
+            const reader = new FileReader();// class that allows you to read files
+            reader.onload = () => {
+                handleSend(file, true, reader.result);
+            };
+            reader.readAsDataURL(file)
+        }
+        toggleAttach();
+    }
+    
+    
+    const handleSend = async (message, isAttachment = false, Src = null) => {
+>>>>>>> 30309fd424d32993eca489b06474991e5a5a3174
         const newMessage = {
             message,
             direction: 'outgoing',
-            sender: "user"
+            sender: "user",
+            attachment: {
+                type: "text",
+                src: Src
+            }
         };
 
+<<<<<<< HEAD
         if (isAttachment === true) {
             newMessage.message = message.target.files[0]['name'];
         }
@@ -129,12 +180,31 @@ function ChatApp() {
         setAiStatus('thinking');
 
         // Send message through WebSocket
+=======
+        if (isAttachment) {
+            newMessage.attachment.type = renderType;
+            newMessage.message = message['name'];
+        }
+
+        setMessages((prevMessages) => [...prevMessages, newMessage]);
+        setUserInput("");
+        setIsTyping(true);
+        setAiStatus('thinking');
+        // setTimeout(() => {
+        //     setIsTyping(false);
+        //     setMessages((prevMessages) => [...prevMessages, { message: "AI's response here", direction: 'incoming', sender: "AI" }]);
+        //     setAiStatus('speaking');
+        //     setTimeout(() => setAiStatus('idle'), 1000);
+        // }, messageSpeed);
+      
+>>>>>>> 30309fd424d32993eca489b06474991e5a5a3174
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             wsRef.current.send(isAttachment ? newMessage.message : message);
         } else {
             console.error('WebSocket is not connected');
         }
     };
+
 
     const getAiImage = () => {
         switch (aiStatus) {
@@ -157,6 +227,7 @@ function ChatApp() {
             setAiStatus('idle');
         }
     };
+<<<<<<< HEAD
 
     const addNewChat = () => {
         const name = prompt("Please enter a username for the new chat:");
@@ -173,6 +244,8 @@ function ChatApp() {
             setCurrentChatId(newChat.id);
         }
     };
+=======
+>>>>>>> 30309fd424d32993eca489b06474991e5a5a3174
 
     return (
         <div className="chat-app">
@@ -183,12 +256,21 @@ function ChatApp() {
                     </button>
                     <img className="iamai" src={getAiImage()} alt="Iamai" />
                     <img className="logo" src={logo} alt="Logo" />
+<<<<<<< HEAD
+=======
+                    {!isConnected && (
+                        <div className="connection-status">
+                            Disconnected
+                        </div>
+                    )}
+>>>>>>> 30309fd424d32993eca489b06474991e5a5a3174
                 </div>
             </header>
             <MainContainer className="chat-main">
                 <ChatContainer className="chat-container">
                     <MessageList
                         scrollBehavior="smooth"
+<<<<<<< HEAD
                         typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}
                     >
                         {chats.find(chat => chat.id === currentChatId)?.messages.map((message, i) => (
@@ -202,6 +284,31 @@ function ChatApp() {
                         onChange={handleInputChange}
                         onSend={(message) => handleSend(message)}
                         disabled={isTyping}
+=======
+                        typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>                        
+                        {messages.map((message, i) => {
+                            if (message.attachment) {
+                                const { type, src } = message.attachment;
+                                if (type === "image") {
+                                    return ( <img key={i} src={src} alt="attachment" style={{ maxWidth: '30%', marginLeft: '70%' }} /> );
+                                } else if (type === "video") {
+                                    return (
+                                        <video key={i} src={src} controls style={{ maxWidth: '30%', marginLeft: '70%' }} />
+                                    );
+                                }
+                            }
+                            return <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />;})
+                        }
+                        
+                    </MessageList>
+                    <MessageInput
+                        className="chat-input"
+                        placeholder="What’s on your mind?"
+                        value={userInput}
+                        onChange={handleInputChange}
+                        onSend={handleSend}
+                        disabled={isTyping || !isConnected}
+>>>>>>> 30309fd424d32993eca489b06474991e5a5a3174
                         style={{ fontSize: `${messageFontSize}px` }}
                         onAttachClick={toggleAttach}
                     />
