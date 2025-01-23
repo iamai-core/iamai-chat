@@ -17,15 +17,12 @@ import { AppContext } from "./App";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import ListGroup from 'react-bootstrap/ListGroup';
 
-//import * as im from "./imports" //Use im.[import] - ex: im.useState(false)
-
 var renderType = "text";
 
 function ChatApp() {
     const { headerColor, messageFontSize, messageSpeed } = useContext(AppContext);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [attachFile, setIsAttachOpen] = useState(false);
-    const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
     const [aiStatus, setAiStatus] = useState('idle');
     const [userInput, setUserInput] = useState("");
@@ -38,6 +35,10 @@ function ChatApp() {
         wsRef.current.onopen = () => {
             setIsConnected(true);
         };
+    const [fileSrc, setFileSrc] = useState(null);
+    const [chats, setChats] = useState([]);
+    const [currentChatId, setCurrentChatId] = useState(1);
+    const toggleMenu = () => setIsMenuOpen((prev) => !prev);
 
         wsRef.current.onmessage = (event) => {
             setIsTyping(false);
@@ -95,12 +96,12 @@ function ChatApp() {
             }
         };
 
-        if (isAttachment) {
-            newMessage.attachment.type = renderType;
-            newMessage.message = message['name'];
-        }
-
-        setMessages((prevMessages) => [...prevMessages, newMessage]);
+        if (isAttachment === true) newMessage.message = message.target.files[0]['name']; // Can use ['name'], ['type'], ['size']
+        setChats((prevChats) => prevChats.map(chat =>
+            chat.id === currentChatId ? 
+                { ...chat, messages: [...chat.messages, newMessage] } :
+                chat
+        ));
         setUserInput("");
         setIsTyping(true);
         setAiStatus('thinking');
@@ -124,9 +125,15 @@ function ChatApp() {
                 message: "Sorry, I'm currently disconnected. Please try again later.",
                 direction: 'incoming',
                 sender: "AI"
-            }]);
-            setAiStatus('idle');
-        }
+            };
+            setChats((prevChats) => prevChats.map(chat =>
+                chat.id === currentChatId ? 
+                    { ...chat, messages: [...chat.messages, aiResponse] } :
+                    chat
+            ));
+            setAiStatus('speaking');
+            setTimeout(() => setAiStatus('idle'), 1000);
+        }, messageSpeed);
     };
 
 
@@ -152,6 +159,20 @@ function ChatApp() {
         }
     };
 
+    const addNewChat = async () => {
+        const chatName = prompt("Please enter a name for the chat:");
+        const modelSelection = prompt("Please choose the model you wish to use (e.g., AI, Chatbot, etc.):");
+
+        if (chatName && modelSelection) {
+            const newChat = {
+                chat_name: chatName,
+                model: modelSelection,
+            };
+            const newChatId = Date.now();
+            setChats((prevChats) => [...prevChats, { id: newChatId, name: chatName, messages: [] }]);
+            setCurrentChatId(newChatId);
+        }
+    };
     return (
         <div className="chat-app" style={{ backgroundColor: headerColor }}>
             <header className="header" style={{ backgroundColor: headerColor }}>
@@ -257,5 +278,4 @@ function ChatApp() {
         </div>
     );
 }
-
 export default ChatApp;
