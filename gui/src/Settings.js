@@ -197,6 +197,7 @@ function Settings() {
                     }}
                 ></div>
             </div>
+
             {/* Font Size Slider */}
             <div className="settings-section">
                 <label htmlFor="font-slider">Message Font Size:</label>
@@ -214,6 +215,7 @@ function Settings() {
                 />
                 <p>Current Value: {messageFontSize}</p>
             </div>
+
             {/* Speed Slider */}
             <div className="settings-section">
                 <label htmlFor="speed-slider">Text to Speech Speed:</label>
