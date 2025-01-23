@@ -16,6 +16,7 @@ function Settings() {
 
     const navigate = useNavigate();
 
+    // Generate gradient for header color
     function generateGradient(h, s, v) {
         const lightnessValues = [90, 70, 50, 30, 10];
         const gradientColors = lightnessValues.map(l => `hsl(${h}, ${s}%, ${l}%)`);
@@ -25,37 +26,30 @@ function Settings() {
     return (
         <div>
             <div className="settings-header">
-                <button
-                    onClick={() => navigate('/')}
-                    className="back-button"
-                >
-                    Back to Main Page
-                </button>
+                <button onClick={() => navigate('/')} className="back-button">Back to Main Page</button>
                 <h2 className="settings-title">Settings</h2>
             </div>
+
+            {/* Model Dropdown */}
             <div className="settings-section">
                 <label htmlFor="model-dropdown">Model:</label>
-                <DropdownButton
-                    id="model-dropdown"
-                    title={selectedModel}
-                    variant="success"
-                >
+                <DropdownButton id="model-dropdown" title={selectedModel} variant="success">
                     <Dropdown.Item onClick={() => setSelectedModel("Model 1")}>Model 1</Dropdown.Item>
                     <Dropdown.Item onClick={() => setSelectedModel("Model 2")}>Model 2</Dropdown.Item>
                     <Dropdown.Item onClick={() => setSelectedModel("Model 3")}>Model 3</Dropdown.Item>
                 </DropdownButton>
             </div>
+
+            {/* Runtime Dropdown */}
             <div className="settings-section">
                 <label htmlFor="run-time-dropdown">Message Run Time:</label>
-                <DropdownButton
-                    id="run-time-dropdown"
-                    title={selectedRuntime}
-                    variant="success"
-                >
+                <DropdownButton id="run-time-dropdown" title={selectedRuntime} variant="success">
                     <Dropdown.Item onClick={() => setSelectedRuntime("Realtime")}>Realtime</Dropdown.Item>
                     <Dropdown.Item onClick={() => setSelectedRuntime("Instant")}>Instant</Dropdown.Item>
                 </DropdownButton>
             </div>
+
+            {/* Header Color Wheel */}
             <div className="settings-section">
                 <label htmlFor="header-color">Header Color:</label>
                 <div className="color-wheel-container">
@@ -89,6 +83,8 @@ function Settings() {
                     }}
                 ></div>
             </div>
+
+            {/* Font Size Slider */}
             <div className="settings-section">
                 <label htmlFor="font-slider">Message Font Size:</label>
                 <ReactSlider
@@ -105,6 +101,8 @@ function Settings() {
                 />
                 <p>Current Value: {messageFontSize}</p>
             </div>
+
+            {/* Speed Slider */}
             <div className="settings-section">
                 <label htmlFor="speed-slider">Text to Speech Speed:</label>
                 <ReactSlider
@@ -125,6 +123,4 @@ function Settings() {
     );
 }
 
-
 export default Settings;
-

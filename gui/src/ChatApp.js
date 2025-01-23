@@ -1,5 +1,3 @@
-// ChatApp.js
-
 import React, { useState, useContext, useEffect } from "react";
 import { Link } from 'react-router-dom';
 import { MainContainer, ChatContainer, MessageList, Message, MessageInput, TypingIndicator } from '@chatscope/chat-ui-kit-react';
@@ -19,8 +17,6 @@ import { AppContext } from "./App";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import ListGroup from 'react-bootstrap/ListGroup';
 
-//import * as im from "./imports" //Use im.[import] - ex: im.useState(false)
-
 var renderType = "text";
 
 function ChatApp() {
@@ -32,23 +28,12 @@ function ChatApp() {
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [attachFile, setIsAttachOpen] = useState(false);
-    const [messages, setMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
     const [aiStatus, setAiStatus] = useState('idle');
     const [userInput, setUserInput] = useState("");
     const [fileSrc, setFileSrc] = useState(null);
-    const [chats, setChats] = useState([{ id: 1, name: localStorage.getItem("username") + "'s Chat", messages: [], username: localStorage.getItem("username") || "" }]);
+    const [chats, setChats] = useState([]);
     const [currentChatId, setCurrentChatId] = useState(1);
-
-    useEffect(() => {
-        if (!chats[0].username) {
-            const name = prompt("Please enter your username for the default chat:");
-            if (name) {
-                setChats(chats.map(chat => chat.id === 1 ? { ...chat, username: name } : chat));
-                localStorage.setItem("username", name);
-            }
-        }
-    }, [chats]);
 
     const toggleMenu = () => setIsMenuOpen((prev) => !prev);
 
@@ -81,19 +66,10 @@ function ChatApp() {
             direction: 'outgoing',
             sender: "user"
         };
-        // const file = message.target.files[0];
-
-        // if (file && isAttachment === true) {
-        //     const reader = new FileReader();// class that allows you to read files
-        //     reader.onload = () => {
-        //         setFileSrc(reader.result); // Set the image source to the data URL
-        //     };
-        //     newMessage.message = reader.readAsDataURL(file); // Read the file as a data URL
-        // }
 
         if (isAttachment === true) newMessage.message = message.target.files[0]['name']; // Can use ['name'], ['type'], ['size']
         setChats((prevChats) => prevChats.map(chat =>
-            chat.id === currentChatId ?
+            chat.id === currentChatId ? 
                 { ...chat, messages: [...chat.messages, newMessage] } :
                 chat
         ));
@@ -109,7 +85,7 @@ function ChatApp() {
                 sender: "AI"
             };
             setChats((prevChats) => prevChats.map(chat =>
-                chat.id === currentChatId ?
+                chat.id === currentChatId ? 
                     { ...chat, messages: [...chat.messages, aiResponse] } :
                     chat
             ));
@@ -140,19 +116,18 @@ function ChatApp() {
         }
     };
 
-    const addNewChat = () => {
-        const name = prompt("Please enter a username for the new chat:");
-        if (name) {
-            localStorage.clear()
-            localStorage.setItem("username", name);
+    const addNewChat = async () => {
+        const chatName = prompt("Please enter a name for the chat:");
+        const modelSelection = prompt("Please choose the model you wish to use (e.g., AI, Chatbot, etc.):");
+
+        if (chatName && modelSelection) {
             const newChat = {
-                id: chats.length + 1,
-                name: localStorage.getItem("username") + "'s Chat",
-                messages: [],
-                username: name
+                chat_name: chatName,
+                model: modelSelection,
             };
-            setChats([...chats, newChat]);
-            setCurrentChatId(newChat.id);
+            const newChatId = Date.now();
+            setChats((prevChats) => [...prevChats, { id: newChatId, name: chatName, messages: [] }]);
+            setCurrentChatId(newChatId);
         }
     };
 
@@ -256,6 +231,5 @@ function ChatApp() {
         </div>
     );
 }
-
 
 export default ChatApp;
