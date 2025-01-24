@@ -14,21 +14,19 @@ function Settings() {
     const [selectedRuntime, setSelectedRuntime] = useState("Select Run Time");
     const { headerColor, setHeaderColor, messageFontSize, setMessageFontSize, messageSpeed, setMessageSpeed } = useContext(AppContext);
     const [hsva, setHsva] = useState({ h: 214, s: 43, v: 90, a: 1 });
-    const [loading, setLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
     const navigate = useNavigate();
 
-    // Fetch available models when component mounts
     useEffect(() => {
         fetchModels();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchModels = async () => {
-        console.log('Fetching models...');
         try {
-            console.log('Making GET request to /models');
-            const response = await fetch('http://localhost:8080/models', {
+            const response = await fetch('/api/models', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -37,69 +35,48 @@ function Settings() {
                 mode: 'cors'
             });
             
-            console.log('Response status:', response.status);
-            console.log('Response headers:', Object.fromEntries([...response.headers]));
-            
-            if (!response.ok) {
-                throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
-            }
-            
-            const text = await response.text();
-            console.log('Raw response:', text);
-            
-            const data = JSON.parse(text);
-            console.log('Parsed response:', data);
-            
-            if (data && Array.isArray(data.models)) {
+            const data = await response.json();
+            if (data?.models?.length) {
                 setAvailableModels(data.models);
-                if (data.models.length > 0 && selectedModel === "Select a Model") {
+                if (selectedModel === "Select a Model") {
                     setSelectedModel(data.models[0]);
                 }
-            } else {
-                console.error('Invalid data format:', data);
-                throw new Error('Invalid data format received from server');
             }
         } catch (err) {
-            const errorMessage = 'Failed to load models: ' + err.message;
-            setError(errorMessage);
-            console.error(errorMessage);
+            setError('Failed to load models: ' + err.message);
         }
     };
     
     const handleModelSelect = async (modelName) => {
-        console.log('Switching to model:', modelName);
-        setLoading(true);
+        setIsLoading(true);
         setError(null);
         
         try {
-            const response = await fetch('http://localhost:8080/models/switch', {
+            const response = await fetch('/api/models/switch', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    'Accept': 'application/json'
                 },
-                body: JSON.stringify({ model: modelName }),
+                mode: 'cors',
+                body: JSON.stringify({ model: modelName })
             });
-            
-            console.log('Switch model response status:', response.status);
-            
-            const result = await response.json();
-            console.log('Switch model result:', result);
     
             if (!response.ok) {
-                throw new Error(result.error || `Failed to switch model: ${response.status}`);
+                throw new Error(`Failed to switch model: ${response.status}`);
+            }
+    
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
             }
     
             setSelectedModel(modelName);
-            setError(null);
         } catch (err) {
-            const errorMessage = 'Failed to switch model: ' + (err.message || 'Unknown error');
-            setError(errorMessage);
-            console.error(errorMessage);
-            // Reset selected model if switch failed
+            setError('Failed to switch model: ' + err.message);
             await fetchModels();
         } finally {
-            setLoading(false);
+            setIsLoading(false);
         }
     };
 
@@ -112,10 +89,7 @@ function Settings() {
     return (
         <div>
             <div className="settings-header">
-                <button
-                    onClick={() => navigate('/')}
-                    className="back-button"
-                >
+                <button onClick={() => navigate('/')} className="back-button">
                     Back to Main Page
                 </button>
                 <h2 className="settings-title">Settings</h2>
@@ -126,9 +100,9 @@ function Settings() {
                 <div>
                     <DropdownButton
                         id="model-dropdown"
-                        title={loading ? "Loading..." : selectedModel}
+                        title={isLoading ? "Loading..." : selectedModel}
                         variant="success"
-                        disabled={loading}
+                        disabled={isLoading}
                     >
                         {availableModels.map((model) => (
                             <Dropdown.Item 
@@ -140,7 +114,7 @@ function Settings() {
                             </Dropdown.Item>
                         ))}
                     </DropdownButton>
-                    {loading && <div className="text-info mt-2">Loading...</div>}
+                    {isLoading && <div className="text-info mt-2">Loading...</div>}
                     {error && (
                         <div className="text-danger mt-2">
                             {error}
@@ -152,13 +126,10 @@ function Settings() {
                             </button>
                         </div>
                     )}
-                    <div className="text-muted mt-1">
-                        Available models: {availableModels.length > 0 ? availableModels.join(', ') : 'None found'}
-                    </div>
                 </div>
             </div>
 
-            {/* Rest of your existing settings sections */}
+            {/* Runtime settings section */}
             <div className="settings-section">
                 <label htmlFor="run-time-dropdown">Message Run Time:</label>
                 <DropdownButton
@@ -171,6 +142,7 @@ function Settings() {
                 </DropdownButton>
             </div>
             
+            {/* Color picker section */}
             <div className="settings-section">
                 <label htmlFor="header-color">Header Color:</label>
                 <div className="color-wheel-container">
@@ -205,6 +177,7 @@ function Settings() {
                 ></div>
             </div>
 
+            {/* Font size slider section */}
             <div className="settings-section">
                 <label htmlFor="font-slider">Message Font Size:</label>
                 <ReactSlider
@@ -222,6 +195,7 @@ function Settings() {
                 <p>Current Value: {messageFontSize}</p>
             </div>
 
+            {/* Speech speed slider section */}
             <div className="settings-section">
                 <label htmlFor="speed-slider">Text to Speech Speed:</label>
                 <ReactSlider
