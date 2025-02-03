@@ -18,7 +18,7 @@ int main() {
    
     // Get the executable path and calculate the gui/build path
     fs::path execPath = fs::current_path();
-    fs::path projectPath = execPath / "gui" / "build";  // Since we're in iamai-chat directory
+    fs::path projectPath = execPath.parent_path().parent_path().parent_path() / "gui" / "build";  // Since we're in iamai-chat directory
     
     std::cout << "Current path: " << execPath << std::endl;
     std::cout << "Project path: " << projectPath << std::endl;
