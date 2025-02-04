@@ -32,6 +32,9 @@ function ChatApp() {
     const [isConnected, setIsConnected] = useState(false);
     const wsRef = useRef(null);
 
+    const toggleMenu = () => setIsMenuOpen((prev) => !prev);
+    const toggleAttach = () => setIsAttachOpen((prev) => !prev);
+
     useEffect(() => {
         wsRef.current = new WebSocket(`ws://${window.location.host}/ws`);
 
@@ -44,7 +47,11 @@ function ChatApp() {
             setMessages(prevMessages => [...prevMessages, {
                 message: event.data,
                 direction: 'incoming',
-                sender: "AI"
+                sender: "AI",
+                attachment: {
+                    type: "text",
+                    src: null
+                }
             }]);
             setAiStatus('speaking');
             setTimeout(() => setAiStatus('idle'), 1000);
@@ -60,10 +67,7 @@ function ChatApp() {
             }
         };
     }, []);
-    
-    const toggleMenu = () => setIsMenuOpen((prev) => !prev);
-    const toggleAttach = () => setIsAttachOpen((prev) => !prev);
-  
+
     function setRenderType(file) {
         renderType = file['type'];
         renderType = renderType.split('/')[0].toLowerCase()
@@ -82,8 +86,8 @@ function ChatApp() {
         }
         toggleAttach();
     }
-    
-    
+
+
     const handleSend = async (message, isAttachment = false, Src = null) => {
         const newMessage = {
             message,
@@ -95,7 +99,7 @@ function ChatApp() {
             }
         };
 
-        if (isAttachment) {
+        if (isAttachment == true) {
             newMessage.attachment.type = renderType;
             newMessage.message = message['name'];
         }
@@ -110,7 +114,7 @@ function ChatApp() {
         //     setAiStatus('speaking');
         //     setTimeout(() => setAiStatus('idle'), 1000);
         // }, messageSpeed);
-      
+        
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             try {
                 wsRef.current.send(message);
@@ -123,7 +127,11 @@ function ChatApp() {
             setMessages(prevMessages => [...prevMessages, {
                 message: "Sorry, I'm currently disconnected. Please try again later.",
                 direction: 'incoming',
-                sender: "AI"
+                sender: "AI",
+                attachment: {
+                    type: "text",
+                    src: null
+                }
             }]);
             setAiStatus('idle');
         }
@@ -172,7 +180,7 @@ function ChatApp() {
                 <ChatContainer className="chat-container">
                     <MessageList
                         scrollBehavior="smooth"
-                        typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>                        
+                        typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>
                         {messages.map((message, i) => {
                             if (message.attachment) {
                                 const { type, src } = message.attachment;
@@ -186,7 +194,7 @@ function ChatApp() {
                             }
                             return <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />;})
                         }
-                        
+
                     </MessageList>
                     <MessageInput
                         className="chat-input"
