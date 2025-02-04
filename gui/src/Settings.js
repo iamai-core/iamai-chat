@@ -24,7 +24,7 @@ function Settings() {
         setMessageSpeed 
     } = useContext(AppContext);
     const [hsva, setHsva] = useState({ h: 214, s: 43, v: 90, a: 1 });
-    const [loading, setLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [savingSettings, setSavingSettings] = useState(false);
     const [saveError, setSaveError] = useState(null);
@@ -74,9 +74,8 @@ function Settings() {
     }, [headerColor, messageFontSize, messageSpeed]);
 
     const fetchModels = async () => {
-        console.log('Fetching models...');
         try {
-            const response = await fetch('http://localhost:8080/models', {
+            const response = await fetch('/api/models', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -93,7 +92,7 @@ function Settings() {
 
             if (data && Array.isArray(data.models)) {
                 setAvailableModels(data.models);
-                if (data.models.length > 0 && selectedModel === "Select a Model") {
+                if (selectedModel === "Select a Model") {
                     setSelectedModel(data.models[0]);
                 }
             } else {
@@ -110,19 +109,25 @@ function Settings() {
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:8080/models/switch', {
+            const response = await fetch('/api/models/switch', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
+                    'Accept': 'application/json'
                 },
-                body: JSON.stringify({ model: modelName }),
+                mode: 'cors',
+                body: JSON.stringify({ model: modelName })
             });
 
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || "Failed to switch model");
+                throw new Error("Failed to switch model");
+            }
+    
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
             }
 
             setSelectedModel(modelName);
@@ -177,9 +182,9 @@ function Settings() {
                 <div>
                     <DropdownButton
                         id="model-dropdown"
-                        title={loading ? "Loading..." : selectedModel}
+                        title={isLoading ? "Loading..." : selectedModel}
                         variant="success"
-                        disabled={loading}
+                        disabled={isLoading}
                     >
                         {availableModels.map((model) => (
                             <Dropdown.Item 
@@ -191,7 +196,7 @@ function Settings() {
                             </Dropdown.Item>
                         ))}
                     </DropdownButton>
-                    {loading && <div className="text-info mt-2">Loading...</div>}
+                    {isLoading && <div className="text-info mt-2">Loading...</div>}
                     {error && (
                         <div className="text-danger mt-2">
                             {error}
@@ -203,9 +208,6 @@ function Settings() {
                             </button>
                         </div>
                     )}
-                    <div className="text-muted mt-1">
-                        Available models: {availableModels.length > 0 ? availableModels.join(', ') : 'None found'}
-                    </div>
             </div>
         </div>
 

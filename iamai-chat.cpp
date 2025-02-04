@@ -202,10 +202,39 @@ int main()
     CROW_ROUTE(app, "/models").methods(crow::HTTPMethod::Get)([&model_manager]()
                                                               {
         std::cout << "Handling GET request for /models" << std::endl;
+    // Register WebSocket endpoint first
+    CROW_WEBSOCKET_ROUTE(app, "/ws")
+        .onopen([](crow::websocket::connection& conn) {
+            std::cout << "WebSocket opened" << std::endl;
+            try {
+                conn.send_text("Server Connected");
+            } catch (const std::exception& e) {
+                std::cerr << "Error in onopen: " << e.what() << std::endl;
+            }
+        })
+        .onclose([](crow::websocket::connection& /*conn*/, const std::string& /*reason*/) {
+            std::cout << "WebSocket closed" << std::endl;
+        })
+        .onmessage([&model_manager](crow::websocket::connection& conn, const std::string& data, bool is_binary) {
+            std::cout << "Received message: " << data << std::endl;
+            try {
+                if (!is_binary && model_manager->getCurrentModel()) {
+                    std::string response = model_manager->getCurrentModel()->generate(data);
+                    std::cout << "Sending response: " << response << std::endl;
+                    conn.send_text(response);
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Error processing message: " << e.what() << std::endl;
+                conn.send_text("Sorry, I encountered an error processing your message.");
+            }
+        });
+
+    // API endpoints
+    CROW_ROUTE(app, "/api/models").methods(crow::HTTPMethod::Get)
+    ([&model_manager]() {
         crow::response res;
         crow::json::wvalue response_body;
         response_body["models"] = model_manager->listModels();
-        
         res.write(response_body.dump());
         res.code = 200;
         res.set_header("Content-Type", "application/json");
@@ -218,10 +247,10 @@ int main()
                                                                       {
         std::cout << "Handling POST request for /models/switch" << std::endl;
         
+    CROW_ROUTE(app, "/api/models/switch").methods(crow::HTTPMethod::Post)
+    ([&model_manager](const crow::request& req) {
         crow::response res;
         res.set_header("Content-Type", "application/json");
-        add_cors_headers(res);
-
         try {
             auto x = crow::json::load(req.body);
             if (!x) {
@@ -229,10 +258,7 @@ int main()
                 res.write("{\"error\": \"Invalid JSON\"}");
                  return res;
             }
-            
             std::string model_name = x["model"].s();
-            std::cout << "Attempting to switch to model: " << model_name << std::endl;
-            
             if (model_manager->switchModel(model_name)) {
                 res.code = 200;
                 res.write("{\"message\": \"Model switched successfully\"}");
@@ -241,7 +267,6 @@ int main()
                 res.write("{\"error\": \"Failed to switch model\"}");
             }
         } catch (const std::exception& e) {
-            std::cout << "Error processing request: " << e.what() << std::endl;
             res.code = 500;
             res.write("{\"error\": \"Internal server error\"}");
                     return res;

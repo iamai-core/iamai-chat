@@ -134,12 +134,7 @@ function ChatApp() {
     
 
     useEffect(() => {
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
-        const reconnectDelay = 3000;
-
-        const connectWebSocket = () => {
-            wsRef.current = new WebSocket(CONFIG.WS_URL);
+        wsRef.current = new WebSocket(`ws://${window.location.host}/ws`);
 
             wsRef.current.onopen = () => {
                 console.log('WebSocket Connected');
