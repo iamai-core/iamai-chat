@@ -7,26 +7,75 @@ import ReactSlider from "react-slider";
 import Wheel from '@uiw/react-color-wheel';
 import { AppContext } from "./App";
 import { hsvaToHex } from '@uiw/color-convert';
+import axios from 'axios';
 
 function Settings() {
-    const [selectedModel, setSelectedModel] = useState("Select a Model");
+    const [selectedModel, setSelectedModel] = useState("");
     const [availableModels, setAvailableModels] = useState([]);
+    const [currentModel, setCurrentModel] = useState("");
+    const [switching, setSwitching] = useState(false);
     const [selectedRuntime, setSelectedRuntime] = useState("Select Run Time");
-    const { headerColor, setHeaderColor, messageFontSize, setMessageFontSize, messageSpeed, setMessageSpeed } = useContext(AppContext);
+    const { 
+        headerColor, 
+        setHeaderColor, 
+        messageFontSize, 
+        setMessageFontSize, 
+        messageSpeed, 
+        setMessageSpeed 
+    } = useContext(AppContext);
     const [hsva, setHsva] = useState({ h: 214, s: 43, v: 90, a: 1 });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [savingSettings, setSavingSettings] = useState(false);
+    const [saveError, setSaveError] = useState(null);
 
     const navigate = useNavigate();
-    // Fetch available models when component mounts
+
     useEffect(() => {
-        fetchModels();
-    }, []);
+        const loadSettings = async () => {
+            try {
+                const response = await axios.get('http://localhost:8080/settings/load');
+                const settings = response.data;
+                setHeaderColor(settings.header_color);
+                setMessageFontSize(settings.font_size);
+                setMessageSpeed(parseInt(settings.text_speed));
+                setSelectedRuntime(settings.text_speed || "Select Run Time");
+            } catch (err) {
+                console.error('Failed to load settings:', err);
+            }
+        };
+
+        loadSettings();
+    }, [setHeaderColor, setMessageFontSize, setMessageSpeed]);
+    useEffect(() => {
+        const saveSettingsToBackend = async () => {
+            try {
+                setSavingSettings(true);
+                setSaveError(null);
+                const finalColor = headerColor.includes(',') 
+                    ? headerColor.split(', ').pop() 
+                    : headerColor;
+                const settingsPayload = {
+                    headerColor: finalColor,
+                    gradientColor: headerColor,
+                    textSpeed: messageSpeed.toString(),
+                    fontSize: messageFontSize
+                };
+                await axios.post('http://localhost:8080/settings/save', settingsPayload);
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                setSaveError('Failed to save settings');
+            } finally {
+                setSavingSettings(false);
+            }
+        };
+        const timeoutId = setTimeout(saveSettingsToBackend, 500);
+        return () => clearTimeout(timeoutId);
+    }, [headerColor, messageFontSize, messageSpeed]);
 
     const fetchModels = async () => {
         console.log('Fetching models...');
         try {
-            console.log('Making GET request to /models');
             const response = await fetch('http://localhost:8080/models', {
                 method: 'GET',
                 headers: {
@@ -35,41 +84,31 @@ function Settings() {
                 },
                 mode: 'cors'
             });
-            
-            console.log('Response status:', response.status);
-            console.log('Response headers:', Object.fromEntries([...response.headers]));
-            
+
             if (!response.ok) {
-                throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+                throw new Error(`Failed to fetch models: ${response.status}`);
             }
-            
-            const text = await response.text();
-            console.log('Raw response:', text);
-            
-            const data = JSON.parse(text);
-            console.log('Parsed response:', data);
-            
+
+            const data = await response.json();
+
             if (data && Array.isArray(data.models)) {
                 setAvailableModels(data.models);
                 if (data.models.length > 0 && selectedModel === "Select a Model") {
                     setSelectedModel(data.models[0]);
                 }
             } else {
-                console.error('Invalid data format:', data);
                 throw new Error('Invalid data format received from server');
             }
         } catch (err) {
-            const errorMessage = 'Failed to load models: ' + err.message;
-            setError(errorMessage);
-            console.error(errorMessage);
+            setError('Failed to load models: ' + err.message);
+            console.error('Failed to load models:', err);
         }
     };
-    
+
     const handleModelSelect = async (modelName) => {
-        console.log('Switching to model:', modelName);
-        setLoading(true);
+        setSwitching(true);
         setError(null);
-        
+
         try {
             const response = await fetch('http://localhost:8080/models/switch', {
                 method: 'POST',
@@ -79,42 +118,60 @@ function Settings() {
                 },
                 body: JSON.stringify({ model: modelName }),
             });
-            
-            console.log('Switch model response status:', response.status);
-            
+
             const result = await response.json();
-            console.log('Switch model result:', result);
-    
+
             if (!response.ok) {
-                throw new Error(result.error || `Failed to switch model: ${response.status}`);
+                throw new Error(result.error || "Failed to switch model");
             }
-    
+
             setSelectedModel(modelName);
-            setError(null);
+            setCurrentModel(modelName);
         } catch (err) {
-            const errorMessage = 'Failed to switch model: ' + (err.message || 'Unknown error');
-            setError(errorMessage);
-            console.error(errorMessage);
-            // Reset selected model if switch failed
-            await fetchModels();
+            setError('Failed to switch model: ' + err.message);
+            console.error('Failed to switch model:', err);
         } finally {
-            setLoading(false);
+            setSwitching(false);
         }
     };
-    // Generate gradient for header color
+
     function generateGradient(h, s, v) {
         const lightnessValues = [90, 70, 50, 30, 10];
         const gradientColors = lightnessValues.map(l => `hsl(${h}, ${s}%, ${l}%)`);
         return `linear-gradient(to left, ${gradientColors.join(', ')})`;
     }
 
+    const handleHeaderColorChange = (color) => {
+        const newGradient = generateGradient(color.hsva.h, color.hsva.s, color.hsva.v);
+        const hexColor = hsvaToHex(color.hsva);
+        setHsva({ ...hsva, ...color.hsva });
+        setHeaderColor(`${newGradient}, ${hexColor}`);
+    };
+
+    const handleFontSizeChange = (value) => {
+        setMessageFontSize(value);
+    };
+
+    const handleSpeedChange = (value) => {
+        setMessageSpeed(value);
+    };
+
     return (
         <div>
             <div className="settings-header">
-                <button onClick={() => navigate('/')} className="back-button">Back to Main Page</button>
+                <button 
+                    onClick={() => navigate('/')} 
+                    className="back-button"
+                    disabled={savingSettings}
+                >
+                    Back to Main Page
+                </button>
                 <h2 className="settings-title">Settings</h2>
+                {savingSettings && <span className="saving-indicator">Saving...</span>}
+                {saveError && <span className="save-error">{saveError}</span>}
             </div>
             
+            {/* Model Selection */}
             <div className="settings-section">
                 <label htmlFor="model-dropdown">Model:</label>
                 <div>
@@ -149,21 +206,27 @@ function Settings() {
                     <div className="text-muted mt-1">
                         Available models: {availableModels.length > 0 ? availableModels.join(', ') : 'None found'}
                     </div>
-                </div>
             </div>
+        </div>
 
-            {/* Rest of your existing settings sections */}
-
-            {/* Runtime Dropdown */}
+            {/* Runtime Selection */}
             <div className="settings-section">
                 <label htmlFor="run-time-dropdown">Message Run Time:</label>
-                <DropdownButton id="run-time-dropdown" title={selectedRuntime} variant="success">
-                    <Dropdown.Item onClick={() => setSelectedRuntime("Realtime")}>Realtime</Dropdown.Item>
-                    <Dropdown.Item onClick={() => setSelectedRuntime("Instant")}>Instant</Dropdown.Item>
+                <DropdownButton 
+                    id="run-time-dropdown" 
+                    title={selectedRuntime} 
+                    variant="success"
+                >
+                    <Dropdown.Item onClick={() => setSelectedRuntime("Realtime")}>
+                        Realtime
+                    </Dropdown.Item>
+                    <Dropdown.Item onClick={() => setSelectedRuntime("Instant")}>
+                        Instant
+                    </Dropdown.Item>
                 </DropdownButton>
             </div>
 
-            {/* Header Color Wheel */}
+            {/* Header Color */}
             <div className="settings-section">
                 <label htmlFor="header-color">Header Color:</label>
                 <div className="color-wheel-container">
@@ -195,10 +258,10 @@ function Settings() {
                         marginTop: 20,
                         background: headerColor
                     }}
-                ></div>
+                />
             </div>
 
-            {/* Font Size Slider */}
+            {/* Font Size */}
             <div className="settings-section">
                 <label htmlFor="font-slider">Message Font Size:</label>
                 <ReactSlider
@@ -211,12 +274,12 @@ function Settings() {
                     min={0}
                     max={100}
                     value={messageFontSize}
-                    onChange={(value) => setMessageFontSize(value)}
+                    onChange={handleFontSizeChange}
                 />
-                <p>Current Value: {messageFontSize}</p>
+                <p>Current Size: {messageFontSize}px</p>
             </div>
 
-            {/* Speed Slider */}
+            {/* Message Speed */}
             <div className="settings-section">
                 <label htmlFor="speed-slider">Text to Speech Speed:</label>
                 <ReactSlider
@@ -229,11 +292,12 @@ function Settings() {
                     min={0}
                     max={100}
                     value={messageSpeed}
-                    onChange={(value) => setMessageSpeed(value)}
+                    onChange={handleSpeedChange}
                 />
-                <p>Current Value: {messageSpeed}</p>
+                <p>Current Speed: {messageSpeed}ms</p>
             </div>
         </div>
     );
 }
+
 export default Settings;
