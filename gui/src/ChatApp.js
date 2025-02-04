@@ -136,53 +136,24 @@ function ChatApp() {
     useEffect(() => {
         wsRef.current = new WebSocket(`ws://${window.location.host}/ws`);
 
-            wsRef.current.onopen = () => {
-                console.log('WebSocket Connected');
-                setIsConnected(true);
-                setError(null);
-                reconnectAttempts = 0;
-            };
-
-            wsRef.current.onclose = () => {
-                console.log('WebSocket Disconnected');
-                setIsConnected(false);
-                
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    reconnectAttempts++;
-                    setTimeout(connectWebSocket, reconnectDelay);
-                } else {
-                    setError('Connection lost. Please refresh the page.');
-                }
-            };
-
-            wsRef.current.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    if (data.type === 'response') {
-                        const aiMessage = {
-                            message: data.content,
-                            direction: 'incoming',
-                            sender: 'ai',
-                            chatId: data.chatId
-                        };
-                        
-                        setMessages(prev => [...prev, aiMessage]);
-                        saveMessageToDatabase(data.chatId, 'ai', data.content);
-                        setIsTyping(false);
-                        setAiStatus('idle');
-                    }
-                } catch (err) {
-                    console.error('Error processing message:', err);
-                    setError('Error processing response');
-                    setIsTyping(false);
-                    setAiStatus('idle');
-                }
-            };
+        wsRef.current.onopen = () => {
+            setIsConnected(true);
         };
 
-        connectWebSocket();
-        loadChats();
+        wsRef.current.onmessage = (event) => {
+            setIsTyping(false);
+            setMessages(prevMessages => [...prevMessages, {
+                message: event.data,
+                direction: 'incoming',
+                sender: "AI"
+            }]);
+            setAiStatus('speaking');
+            setTimeout(() => setAiStatus('idle'), 1000);
+        };
+
+        wsRef.current.onclose = () => {
+            setIsConnected(false);
+        };
 
         return () => {
             if (wsRef.current) {

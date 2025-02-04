@@ -198,38 +198,7 @@ int main()
         add_cors_headers(res);
         res.code = 204;
         return res; });
-
-    CROW_ROUTE(app, "/models").methods(crow::HTTPMethod::Get)([&model_manager]()
-                                                              {
-        std::cout << "Handling GET request for /models" << std::endl;
-    // Register WebSocket endpoint first
-    CROW_WEBSOCKET_ROUTE(app, "/ws")
-        .onopen([](crow::websocket::connection& conn) {
-            std::cout << "WebSocket opened" << std::endl;
-            try {
-                conn.send_text("Server Connected");
-            } catch (const std::exception& e) {
-                std::cerr << "Error in onopen: " << e.what() << std::endl;
-            }
-        })
-        .onclose([](crow::websocket::connection& /*conn*/, const std::string& /*reason*/) {
-            std::cout << "WebSocket closed" << std::endl;
-        })
-        .onmessage([&model_manager](crow::websocket::connection& conn, const std::string& data, bool is_binary) {
-            std::cout << "Received message: " << data << std::endl;
-            try {
-                if (!is_binary && model_manager->getCurrentModel()) {
-                    std::string response = model_manager->getCurrentModel()->generate(data);
-                    std::cout << "Sending response: " << response << std::endl;
-                    conn.send_text(response);
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Error processing message: " << e.what() << std::endl;
-                conn.send_text("Sorry, I encountered an error processing your message.");
-            }
-        });
-
-    // API endpoints
+    
     CROW_ROUTE(app, "/api/models").methods(crow::HTTPMethod::Get)
     ([&model_manager]() {
         crow::response res;
@@ -242,10 +211,6 @@ int main()
         
         std::cout << "Returning models response with body: " << response_body.dump() << std::endl;
         return res; });
-
-    CROW_ROUTE(app, "/models/switch").methods(crow::HTTPMethod::Post)([&model_manager](const crow::request &req)
-                                                                      {
-        std::cout << "Handling POST request for /models/switch" << std::endl;
         
     CROW_ROUTE(app, "/api/models/switch").methods(crow::HTTPMethod::Post)
     ([&model_manager](const crow::request& req) {
@@ -541,6 +506,7 @@ int main()
         }
         return res; });
 
+
     CROW_WEBSOCKET_ROUTE(app, "/ws")
         .onopen([](crow::websocket::connection &conn)
                 {
@@ -590,6 +556,57 @@ int main()
                 error_response["message"] = e.what();
                 conn.send_text(error_response.dump());
             } });
+
+    CROW_ROUTE(app, "/")
+    ([projectPath](const crow::request& req) {
+        fs::path indexPath = projectPath / "index.html";
+        std::ifstream file(indexPath.string(), std::ios::binary);
+        if (!file) {
+            crow::response res(404);
+            res.write("index.html not found");
+            return res;
+        }
+        crow::response res;
+        res.set_header("Content-Type", "text/html");
+        res.write(std::string(
+            std::istreambuf_iterator<char>(file),
+            std::istreambuf_iterator<char>()
+        ));
+        return res;
+    });
+
+    CROW_ROUTE(app, "/<path>")
+    ([projectPath](const crow::request& req, std::string path) {
+        fs::path filepath = projectPath / path;
+        crow::response res;
+        
+        if (hasExtension(path, ".html")) res.set_header("Content-Type", "text/html");
+        else if (hasExtension(path, ".js")) res.set_header("Content-Type", "application/javascript");
+        else if (hasExtension(path, ".css")) res.set_header("Content-Type", "text/css");
+        else if (hasExtension(path, ".json")) res.set_header("Content-Type", "application/json");
+        else if (hasExtension(path, ".png")) res.set_header("Content-Type", "image/png");
+        else if (hasExtension(path, ".jpg") || hasExtension(path, ".jpeg")) res.set_header("Content-Type", "image/jpeg");
+        else if (hasExtension(path, ".ico")) res.set_header("Content-Type", "image/x-icon");
+        else res.set_header("Content-Type", "text/plain");
+
+        std::ifstream file(filepath.string(), std::ios::binary);
+        if (!file) {
+            fs::path indexPath = projectPath / "index.html";
+            file.open(indexPath.string(), std::ios::binary);
+            if (!file) {
+                res.code = 404;
+                res.write("Not found");
+                return res;
+            }
+            res.set_header("Content-Type", "text/html");
+        }
+        
+        res.write(std::string(
+            std::istreambuf_iterator<char>(file),
+            std::istreambuf_iterator<char>()
+        ));
+        return res;
+    });
 
     std::cout << "Starting server on port 8080..." << std::endl;
     app.port(8080).run();
