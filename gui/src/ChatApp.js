@@ -33,7 +33,7 @@ function ChatApp() {
     const wsRef = useRef(null);
 
     useEffect(() => {
-        wsRef.current = new WebSocket('ws://localhost:8080/ws');
+        wsRef.current = new WebSocket(`ws://${window.location.host}/ws`);
 
         wsRef.current.onopen = () => {
             setIsConnected(true);
