@@ -29,37 +29,6 @@ const CONFIG = {
     WS_URL: process.env.REACT_APP_WS_URL || 'ws://localhost:8080/ws'
 };
 
-async function fetchWithErrorHandling(url, options = {}) {
-    try {
-        const defaultHeaders = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        };
-        
-        const response = await fetch(url, {
-            ...options,
-            headers: {
-                ...defaultHeaders,
-                ...options.headers
-            }
-        });
-
-        const data = await response.json();
-        
-        return {
-            success: response.ok,
-            data: response.ok ? data : null,
-            error: !response.ok ? data : null
-        };
-    } catch (error) {
-        console.error('Fetch error:', error);
-        return {
-            success: false,
-            data: null,
-            error: error.message
-        };
-    }
-}
 
 function ChatApp() {
     const { headerColor, messageFontSize, messageSpeed } = useContext(AppContext);
@@ -75,133 +44,176 @@ function ChatApp() {
     const [error, setError] = useState(null);
     const wsRef = useRef(null);
 
-    const loadChats = async () => {
-        const result = await fetchWithErrorHandling(`${CONFIG.API_BASE_URL}/chats`);
-        
-        if (result.success) {
-            if (result.data.length === 0) {
-                await addNewChat();
-            } else {
-                setChats(result.data);
-                const firstChatId = result.data[0].id;
-                setCurrentChatId(firstChatId);
-                await loadMessages(firstChatId);
-            }
-        } else {
-            setError('Failed to load existing chats');
-        }
-    };
-
-    const loadMessages = async (chatId) => {
-        const result = await fetchWithErrorHandling(`${CONFIG.API_BASE_URL}/chat/messages?chat_id=${chatId}`);
-        
-        if (result.success) {
-            const formattedMessages = result.data.map(msg => ({
-                message: msg.content,
-                direction: msg.sender === 'user' ? 'outgoing' : 'incoming',
-                sender: msg.sender
-            }));
-            setMessages(formattedMessages);
-        }
-    };
-
-    const addNewChat = async () => {
-        const chatName = prompt("Enter a name for your new chat:");
-        const modelSelection = prompt("Choose the model you wish to use (e.g., AI, Chatbot, etc.):");
-    
-        if (!chatName || !modelSelection) {
-            alert("Chat creation canceled. Both chat name and model selection are required.");
-            return;
-        }
-    
-        const result = await fetchWithErrorHandling(`${CONFIG.API_BASE_URL}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: chatName,
-                model: modelSelection
-            })
-        });
-    
-        if (result.success) {
-            setChats(prev => [...prev, result.data]);
-            setCurrentChatId(result.data.id);
-            setMessages([]);
-        } else {
-            setError('Failed to create chat');
-        }
-    };
-    
+    useEffect(() => {
+        loadChats();
+    }, []);
 
     useEffect(() => {
-        wsRef.current = new WebSocket(`ws://${window.location.host}/ws`);
+        if (currentChatId) {
+            loadMessages(currentChatId);
+        }
+    }, [currentChatId]);
 
-        wsRef.current.onopen = () => {
-            setIsConnected(true);
-        };
-
-        wsRef.current.onmessage = (event) => {
-            setIsTyping(false);
-            setMessages(prevMessages => [...prevMessages, {
-                message: event.data,
-                direction: 'incoming',
-                sender: "AI"
-            }]);
-            setAiStatus('speaking');
-            setTimeout(() => setAiStatus('idle'), 1000);
-        };
-
-        wsRef.current.onclose = () => {
-            setIsConnected(false);
-        };
-
+    useEffect(() => {
+        setupWebSocket();
         return () => {
             if (wsRef.current) {
                 wsRef.current.close();
             }
         };
-    }, []);
+    }, [currentChatId]);
 
-    const saveMessageToDatabase = async (chatId, sender, content) => {
-        await fetchWithErrorHandling(`${CONFIG.API_BASE_URL}/chat/message`, {
-            method: 'POST',
-            body: JSON.stringify({
-                chat_id: chatId,
-                sender,
-                content
-            })
-        });
+    const setupWebSocket = () => {
+        wsRef.current = new WebSocket(CONFIG.WS_URL);
+
+        wsRef.current.onopen = () => {
+            setIsConnected(true);
+            console.log("WebSocket connected");
+        };
+
+        wsRef.current.onmessage = (event) => {
+            try {
+                const response = JSON.parse(event.data);
+                if (response.type === "response" && response.chatId === currentChatId) {
+                    setIsTyping(false);
+                    const newMessage = {
+                        message: response.content,
+                        direction: 'incoming',
+                        sender: "AI"
+                    };
+                    setMessages(prev => [...prev, newMessage]);
+                    saveMessageToDatabase(currentChatId, 'AI', response.content);
+                    setAiStatus('speaking');
+                    setTimeout(() => setAiStatus('idle'), 1000);
+                }
+            } catch (error) {
+                console.error("Error processing WebSocket message:", error);
+            }
+        };
+
+        wsRef.current.onclose = () => {
+            setIsConnected(false);
+            console.log("WebSocket disconnected");
+        };
     };
 
-    const handleSend = async (message, isAttachment = false, attachment = null) => {
-        if (!isConnected || !currentChatId) {
-            setError("Not connected or no chat selected");
+
+    const loadChats = async () => {
+        try {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/chats`);
+            const data = await response.json();
+            
+            if (response.ok) {
+                setChats(data);
+                if (data.length > 0 && !currentChatId) {
+                    setCurrentChatId(data[0].id);
+                }
+            } else {
+                setError('Failed to load chats');
+                console.error('Failed to load chats:', data.error);
+            }
+        } catch (error) {
+            setError('Failed to load chats');
+            console.error('Error loading chats:', error);
+        }
+    };
+
+    const loadMessages = async (chatId) => {
+        try {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/chat/messages?chat_id=${chatId}`);
+            const data = await response.json();
+            
+            if (response.ok) {
+                const formattedMessages = data.map(msg => ({
+                    message: msg.content,
+                    direction: msg.sender === 'user' ? 'outgoing' : 'incoming',
+                    sender: msg.sender
+                }));
+                setMessages(formattedMessages);
+            } else {
+                console.error('Failed to load messages:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading messages:', error);
+        }
+    };
+
+    const addNewChat = async () => {
+        const chatName = prompt("Enter a name for your new chat:");
+    
+        if (!chatName) {
+            alert("Chat creation canceled. Chat name required.");
             return;
         }
     
         try {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: chatName,
+                })
+            });
+    
+            const data = await response.json();
+            
+            if (response.ok) {
+                setChats(prev => [...prev, data]);
+                setCurrentChatId(data.id);
+                setMessages([]);
+            } else {
+                setError('Failed to create chat');
+                console.error('Failed to create chat:', data.error);
+            }
+        } catch (error) {
+            setError('Failed to create chat');
+            console.error('Error creating chat:', error);
+        }
+    };
+    const saveMessageToDatabase = async (chatId, sender, content) => {
+        try {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/chat/message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    sender,
+                    content
+                })
+            });
+            
+            if (!response.ok) {
+                console.error('Failed to save message:', await response.json());
+            }
+        } catch (error) {
+            console.error('Error saving message:', error);
+        }
+    };
+    const handleSend = async (message) => {
+        if (!isConnected || !currentChatId) {
+            setError("Not connected or no chat selected");
+            return;
+        }
+
+        try {
             const newMessage = {
                 message,
                 direction: 'outgoing',
-                sender: "user",
-                chatId: currentChatId
+                sender: "user"
             };
-    
+
             setMessages(prev => [...prev, newMessage]);
             await saveMessageToDatabase(currentChatId, 'user', message);
             
             setUserInput("");
             setIsTyping(true);
             setAiStatus('thinking');
-    
+
             if (wsRef.current?.readyState === WebSocket.OPEN) {
-                try {
-                    wsRef.current.send(isAttachment ? JSON.stringify(attachment) : message);
-                } catch (error) {
-                    console.error("WebSocket error:", error);
-                    setIsTyping(false);
-                    setAiStatus('idle');
-                }
                 wsRef.current.send(JSON.stringify({
                     type: 'message',
                     content: message,
@@ -216,6 +228,14 @@ function ChatApp() {
             setIsTyping(false);
             setAiStatus('idle');
         }
+    };
+
+    const handleChatSwitch = (chatId) => {
+        setCurrentChatId(chatId);
+        setMessages([]);
+        setUserInput("");
+        setIsTyping(false);
+        setAiStatus('idle');
     };
 
     const HandleFileChange = (event) => {
@@ -251,7 +271,7 @@ function ChatApp() {
         <div className="chat-app">
             <header className="header" style={{ background: headerColor }}>
                 <div className="menu-container">
-                    <button className="menu-btn" onClick={toggleMenu} type="button">
+                    <button className="menu-btn" onClick={() => setIsMenuOpen(prev => !prev)} type="button">
                         <img className="menu" src={menu_Img} alt="menu" />
                     </button>
                     <img className="iamai" src={getAiImage()} alt="Iamai" />
@@ -263,37 +283,31 @@ function ChatApp() {
                     <MessageList
                         scrollBehavior="smooth"
                         typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>
-                        {messages.map((message, i) => {
-                            if (message.attachment) {
-                                const { type, src } = message.attachment;
-                                if (type === "image") {
-                                    return (<img key={i} src={src} alt="attachment" style={{ maxWidth: '30%', marginLeft: '70%' }} />);
-                                } else if (type === "video") {
-                                    return (<video key={i} controls src={src} style={{ maxWidth: '30%', marginLeft: '70%' }} />);
-                                }
-                            }
-                            return <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />;
-                        })
-                        }
+                        {messages.map((message, i) => (
+                            <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />
+                        ))}
                     </MessageList>
                     <MessageInput
                         className="chat-input"
-                        placeholder="What’s on your mind?"
+                        placeholder="What's on your mind?"
                         value={userInput}
-                        onChange={handleInputChange}
+                        onChange={(html, text) => {
+                            setUserInput(text);
+                            setAiStatus(text ? 'listening' : 'idle');
+                        }}
                         onSend={handleSend}
                         disabled={isTyping || !isConnected}
                         style={{ fontSize: `${messageFontSize}px` }}
-                        onAttachClick={toggleAttach}
+                        onAttachClick={() => setAttachFile(prev => !prev)}
                     />
                 </ChatContainer>
             </MainContainer>
-            
+
             {isMenuOpen && (
                 <div className="sidebar-overlay">
                     <div className="sidebar">
                         <nav>
-                            <button className="close-menu" onClick={toggleMenu} type="button">
+                            <button className="close-menu" onClick={() => setIsMenuOpen(false)} type="button">
                                 <img src={menu_Img} alt="close" />
                             </button>
                             <button className="add-button" onClick={addNewChat}>
@@ -301,16 +315,14 @@ function ChatApp() {
                             </button>
                         </nav>
                         <hr className="divider" />
-                        <div className="profile-section">
-                            <div className="profile-circle"></div>
-                            <div className="profile-name">
-                                {chats.find(chat => chat.id === currentChatId)?.username}
-                            </div>
-                        </div>
                         <div className="chat-list">
                             {chats.map(chat => (
-                                <div key={chat.id} className={`chat-item ${chat.id === currentChatId ? 'active' : ''}`} onClick={() => setCurrentChatId(chat.id)}>
-                                    {chat.name}
+                                <div
+                                    key={chat.id}
+                                    className={`chat-item ${chat.id === currentChatId ? 'active' : ''}`}
+                                    onClick={() => handleChatSwitch(chat.id)}
+                                >
+                                    <span className="chat-name">{chat.name}</span>
                                 </div>
                             ))}
                         </div>

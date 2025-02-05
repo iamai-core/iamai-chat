@@ -12,8 +12,10 @@
 using namespace iamai;
 namespace fs = std::filesystem;
 
-bool hasExtension(const std::string& path, const std::string& ext) {
-    if (ext.length() > path.length()) return false;
+bool hasExtension(const std::string &path, const std::string &ext)
+{
+    if (ext.length() > path.length())
+        return false;
     return path.compare(path.length() - ext.length(), ext.length(), ext) == 0;
 }
 
@@ -61,7 +63,6 @@ sqlite3 *initializeDatabase()
         CREATE TABLE IF NOT EXISTS Chats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            model TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     )";
@@ -78,14 +79,16 @@ sqlite3 *initializeDatabase()
     )";
     const char *createSettingsTable = R"(
         CREATE TABLE IF NOT EXISTS Settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            header_color TEXT NOT NULL,
-            gradient_color TEXT NOT NULL,
-            text_speed INTEGER NOT NULL,
-            font_size INTEGER NOT NULL,
-            run_time TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        header_color TEXT NOT NULL,
+        gradient_color TEXT NOT NULL,
+        text_speed INTEGER NOT NULL,
+        font_size INTEGER NOT NULL,
+        model TEXT NOT NULL,
+        run_time TEXT NOT NULL,
+        is_gradient BOOLEAN DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
     )";
 
     const char *tables[] = {createChatsTable, createMessagesTable, createSettingsTable};
@@ -198,9 +201,9 @@ int main()
         add_cors_headers(res);
         res.code = 204;
         return res; });
-    
-    CROW_ROUTE(app, "/api/models").methods(crow::HTTPMethod::Get)
-    ([&model_manager]() {
+
+    CROW_ROUTE(app, "/api/models").methods(crow::HTTPMethod::Get)([&model_manager]()
+                                                                  {
         crow::response res;
         crow::json::wvalue response_body;
         response_body["models"] = model_manager->listModels();
@@ -211,9 +214,9 @@ int main()
         
         std::cout << "Returning models response with body: " << response_body.dump() << std::endl;
         return res; });
-        
-    CROW_ROUTE(app, "/api/models/switch").methods(crow::HTTPMethod::Post)
-    ([&model_manager](const crow::request& req) {
+
+    CROW_ROUTE(app, "/api/models/switch").methods(crow::HTTPMethod::Post)([&model_manager](const crow::request &req)
+                                                                          {
         crow::response res;
         res.set_header("Content-Type", "application/json");
         try {
@@ -252,15 +255,13 @@ int main()
         }
 
         std::string name = x["name"].s();
-        std::string model = x["model"].s();
 
-        std::string query = "INSERT INTO Chats (name, model) VALUES (?, ?)";
+        std::string query = "INSERT INTO Chats (name) VALUES (?, ?)";
         if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
             throw std::runtime_error(sqlite3_errmsg(db));
         }
 
         sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, model.c_str(), -1, SQLITE_TRANSIENT);
 
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             throw std::runtime_error(sqlite3_errmsg(db));
@@ -268,7 +269,7 @@ int main()
 
         int64_t chatId = sqlite3_last_insert_rowid(db);
         res.code = 200;
-        res.write("{\"id\": " + std::to_string(chatId) + ", \"name\": \"" + name + "\", \"model\": \"" + model + "\"}");
+        res.write("{\"id\": " + std::to_string(chatId) + ", \"name\": \"" + name + "\"}");
     } catch (const std::exception& e) {
         res.code = 500;
         res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
@@ -284,7 +285,7 @@ int main()
         sqlite3_stmt* stmt = nullptr;
 
         try {
-            std::string query = "SELECT id, name, model FROM Chats ORDER BY created_at DESC";
+            std::string query = "SELECT id, name FROM Chats ORDER BY created_at DESC";
             if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
                 throw std::runtime_error(sqlite3_errmsg(db));
             }
@@ -294,7 +295,6 @@ int main()
                 crow::json::wvalue chat;
                 chat["id"] = sqlite3_column_int(stmt, 0);
                 chat["name"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
-                chat["model"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
                 chats.push_back(std::move(chat));
             }
 
@@ -418,54 +418,58 @@ int main()
     res.code = 204;
     return res; });
 
-    CROW_ROUTE(app, "/settings/save").methods(crow::HTTPMethod::Post)([db](const crow::request &req)
-                                                                      {
-        crow::response res;
-        add_cors_headers(res);
-        sqlite3_stmt* stmt = nullptr;
-        try {
-            auto x = crow::json::load(req.body);
-            if (!x) {
-                res.code = 400;
-                res.write("{\"error\": \"Invalid JSON\"}");
-                return res;
-            }
-
-            std::string header_color = x["headerColor"].s();
-            std::string gradient_color = x["gradientColor"].s();
-            std::string text_speed = x["textSpeed"].s();
-            int font_size = x["fontSize"].i();
-
-            std::string query = R"(
-                INSERT INTO Settings (header_color, gradient_color, text_speed, font_size, run_time)
-                VALUES (?, ?, ?, ?, datetime('now'))
-            )";
-
-            if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-                throw std::runtime_error(sqlite3_errmsg(db));
-            }
-
-            sqlite3_bind_text(stmt, 1, header_color.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 2, gradient_color.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 3, text_speed.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_int(stmt, 4, font_size);
-
-            if (sqlite3_step(stmt) != SQLITE_DONE) {
-                throw std::runtime_error(sqlite3_errmsg(db));
-            }
-
-            res.code = 200;
-            res.write("{\"message\": \"Settings saved successfully\"}");
-        }
-        catch (const std::exception& e) {
-            res.code = 500;
-            res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
+    CROW_ROUTE(app, "/settings/save").methods(crow::HTTPMethod::Post)([db](const crow::request &req) {
+    crow::response res;
+    add_cors_headers(res);
+    sqlite3_stmt* stmt = nullptr;
+    try {
+        auto x = crow::json::load(req.body);
+        if (!x) {
+            res.code = 400;
+            res.write("{\"error\": \"Invalid JSON\"}");
+            return res;
         }
 
-        if (stmt) {
-            sqlite3_finalize(stmt);
+        std::string header_color = x["headerColor"].s();
+        std::string gradient_color = x["gradientColor"].s();
+        std::string text_speed = x["textSpeed"].s();
+        std::string model = x["model"].s();
+        int font_size = x["fontSize"].i();
+        bool is_gradient = x["isGradient"].b();
+
+        std::string query = R"(
+            INSERT INTO Settings (header_color, gradient_color, text_speed, model, font_size, run_time, is_gradient)
+            VALUES (?, ?, ?, ?, datetime('now'), ?)
+        )";
+
+        if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+            throw std::runtime_error(sqlite3_errmsg(db));
         }
-        return res; });
+
+        sqlite3_bind_text(stmt, 1, header_color.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, gradient_color.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, text_speed.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, model.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 5, font_size);
+        sqlite3_bind_int(stmt, 6, is_gradient ? 1 : 0);
+
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+            throw std::runtime_error(sqlite3_errmsg(db));
+        }
+
+        res.code = 200;
+        res.write("{\"message\": \"Settings saved successfully\"}");
+    }
+    catch (const std::exception& e) {
+        res.code = 500;
+        res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
+    }
+
+    if (stmt) {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+});
 
     CROW_ROUTE(app, "/settings/load").methods(crow::HTTPMethod::Get)([db]()
                                                                      {
@@ -487,8 +491,8 @@ int main()
                 result["gradient_color"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
                 result["text_speed"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)));
                 result["font_size"] = sqlite3_column_int(stmt, 4);
-                result["run_time"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
-
+                result["model"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
+                result["run_time"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
                 res.write(result.dump());
                 res.code = 200;
             } else {
@@ -505,7 +509,6 @@ int main()
             sqlite3_finalize(stmt);
         }
         return res; });
-
 
     CROW_WEBSOCKET_ROUTE(app, "/ws")
         .onopen([](crow::websocket::connection &conn)
@@ -558,7 +561,8 @@ int main()
             } });
 
     CROW_ROUTE(app, "/")
-    ([projectPath](const crow::request& req) {
+    ([projectPath](const crow::request &req)
+     {
         fs::path indexPath = projectPath / "index.html";
         std::ifstream file(indexPath.string(), std::ios::binary);
         if (!file) {
@@ -572,11 +576,11 @@ int main()
             std::istreambuf_iterator<char>(file),
             std::istreambuf_iterator<char>()
         ));
-        return res;
-    });
+        return res; });
 
     CROW_ROUTE(app, "/<path>")
-    ([projectPath](const crow::request& req, std::string path) {
+    ([projectPath](const crow::request &req, std::string path)
+     {
         fs::path filepath = projectPath / path;
         crow::response res;
         
@@ -605,8 +609,7 @@ int main()
             std::istreambuf_iterator<char>(file),
             std::istreambuf_iterator<char>()
         ));
-        return res;
-    });
+        return res; });
 
     std::cout << "Starting server on port 8080..." << std::endl;
     app.port(8080).run();
