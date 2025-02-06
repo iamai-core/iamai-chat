@@ -11,7 +11,7 @@ function App() {
   const [headerColor, setHeaderColor] = useState('#164194');
   const [messageFontSize, setMessageFontSize] = useState(16);
   const [messageSpeed, setMessageSpeed] = useState(1000);
-  const [models, setModels] = useState([]);
+  const [currentModel, setCurrentModel] = useState('');
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   useEffect(() => {
@@ -22,8 +22,7 @@ function App() {
         setHeaderColor(settings.header_color || '#164194');
         setMessageFontSize(settings.font_size || 16);
         setMessageSpeed(parseInt(settings.text_speed) || 1000);
-        const modelsResponse = await axios.get('http://localhost:8080/models');
-        setModels(modelsResponse.data.models || []);
+        setCurrentModel(settings.model || '');
       } catch (error) {
         console.error('Failed to load initial settings:', error);
         setHeaderColor('#164194');
@@ -36,13 +35,15 @@ function App() {
 
     loadInitialSettings();
   }, []);
+
   const saveSettings = async () => {
     try {
       await axios.post('http://localhost:8080/settings/save', {
         headerColor,
         gradientColor: headerColor,
         textSpeed: messageSpeed.toString(),
-        fontSize: messageFontSize
+        fontSize: messageFontSize,
+        model: currentModel
       });
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -54,10 +55,11 @@ function App() {
       headerColor,
       messageFontSize,
       messageSpeed,
+      currentModel,
       setHeaderColor,
       setMessageFontSize,
       setMessageSpeed,
-      models,
+      setCurrentModel,
       saveSettings,
       isLoadingSettings
     }}>
