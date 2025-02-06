@@ -45,6 +45,22 @@ target_include_directories(Crow INTERFACE ${CMAKE_SOURCE_DIR}/include)
 find_library(SHELL32_LIBRARY Shell32)
 find_library(OLE32_LIBRARY Ole32)
 
+# Set SQLite3 include and lib directories correctly
+set(SQLite3_INCLUDE_DIR "./iamai-core/core")
+set(SQLite3_LIB_DIR "./iamai-core/core")
+
+# Add SQLite3 include and lib directories
+include_directories(${SQLite3_INCLUDE_DIR})
+link_directories(${SQLite3_LIB_DIR})
+
+# Ensure SQLite3 library is found and link to the target
+find_library(SQLITE3_LIBRARY sqlite3.lib ${SQLite3_LIB_DIR})
+if(SQLITE3_LIBRARY)
+    message(STATUS "SQLite3 library found at ${SQLITE3_LIBRARY}")
+else()
+    message(FATAL_ERROR "SQLite3 library not found.")
+endif()
+
 # Create the executable
 add_executable(iamai-chat
     iamai-chat.cpp
@@ -67,16 +83,11 @@ target_link_libraries(iamai-chat
     ${SHELL32_LIBRARY}
     ${OLE32_LIBRARY}
     Threads::Threads
+    ${SQLITE3_LIBRARY}  # Link SQLite3 library directly here
 )
 
 # Find and link threads
 find_package(Threads REQUIRED)
-
-# Optional: Add OpenSSL if needed
-find_package(OpenSSL)
-if(OpenSSL_FOUND)
-    target_link_libraries(iamai-chat PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-endif()
 
 # Set additional compiler flags
 if(MSVC)
