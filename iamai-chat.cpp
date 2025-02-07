@@ -2,9 +2,12 @@
 #include <iostream>
 #include <stdexcept>
 #include <filesystem>
+#include <fstream>
 #include "crow.h"
 #include "iamai-core/core/folder_manager.h"
 #include "iamai-core/core/model_manager.h"
+#include "iamai-core/core/whisper_interface.h"
+
 using namespace iamai;
 namespace fs = std::filesystem;
 
@@ -13,12 +16,34 @@ bool hasExtension(const std::string& path, const std::string& ext) {
     return path.compare(path.length() - ext.length(), ext.length(), ext) == 0;
 }
 
+// Helper function to save binary data to a temporary WAV file
+std::string saveTempWavFile(const std::string& binary_data) {
+    auto& folder_manager = FolderManager::getInstance();
+    fs::path temp_path = folder_manager.getAppDataPath() / "temp";
+    
+    // Create temp directory if it doesn't exist
+    if (!fs::exists(temp_path)) {
+        fs::create_directories(temp_path);
+    }
+    
+    // Generate unique filename
+    std::string filename = "temp_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + ".wav";
+    fs::path file_path = temp_path / filename;
+    
+    // Save binary data
+    std::ofstream file(file_path.string(), std::ios::binary);
+    file.write(binary_data.data(), binary_data.size());
+    file.close();
+    
+    return file_path.string();
+}
+
 int main() {
     crow::SimpleApp app;
    
     // Get the executable path and calculate the gui/build path
     fs::path execPath = fs::current_path();
-    fs::path projectPath = execPath.parent_path().parent_path().parent_path() / "gui" / "build";  // Since we're in iamai-chat directory
+    fs::path projectPath = execPath.parent_path().parent_path().parent_path() / "gui" / "build";
     
     std::cout << "Current path: " << execPath << std::endl;
     std::cout << "Project path: " << projectPath << std::endl;
@@ -37,59 +62,92 @@ int main() {
     }
 
     std::cout << "Using GUI path: " << projectPath << std::endl;
-
-    // Initialize the folder structure
+    
+    // Initialize folder structure
+    auto& folder_manager = FolderManager::getInstance();
+    if (!folder_manager.createFolderStructure()) {
+        throw std::runtime_error("Failed to create folder structure");
+    }
+    
+    // Initialize Whisper interface
+    std::unique_ptr<WhisperInterface> whisper;
     try {
-        auto& folder_manager = FolderManager::getInstance();
-        if (!folder_manager.createFolderStructure()) {
-            throw std::runtime_error("Failed to create folder structure");
+        fs::path whisper_model_path = folder_manager.getModelsPath() / "ggml-base.en.bin";
+        if (!fs::exists(whisper_model_path)) {
+            std::cerr << "Warning: Whisper model not found at " << whisper_model_path << std::endl;
+        } else {
+            whisper = std::make_unique<WhisperInterface>(whisper_model_path.string());
+            whisper->setThreads(4);
+            whisper->setLanguage("en");
         }
     } catch (const std::exception& e) {
-        std::cerr << "Failed to initialize folder structure: " << e.what() << std::endl;
-        return 1;
+        std::cerr << "Failed to initialize Whisper: " << e.what() << std::endl;
     }
 
-    // Initialize the Model Manager
+    // Initialize Model Manager
     std::unique_ptr<ModelManager> model_manager;
     try {
         model_manager = std::make_unique<ModelManager>();
         auto models = model_manager->listModels();
-        if (models.empty()) {
-            std::cout << "No models found in models directory" << std::endl;
-        } else {
-            if (!model_manager->switchModel(models[0])) {
-                throw std::runtime_error("Failed to load default model");
-            }
+        if (!models.empty()) {
+            model_manager->switchModel(models[0]);
         }
     } catch (const std::exception& e) {
         std::cerr << "Failed to initialize Model Manager: " << e.what() << std::endl;
         return 1;
     }
 
-    // Register WebSocket endpoint first
+    // WebSocket endpoint
     CROW_WEBSOCKET_ROUTE(app, "/ws")
         .onopen([](crow::websocket::connection& conn) {
             std::cout << "WebSocket opened" << std::endl;
-            try {
-                conn.send_text("Server Connected");
-            } catch (const std::exception& e) {
-                std::cerr << "Error in onopen: " << e.what() << std::endl;
-            }
+            conn.send_text("Server Connected");
         })
         .onclose([](crow::websocket::connection& /*conn*/, const std::string& /*reason*/) {
             std::cout << "WebSocket closed" << std::endl;
         })
-        .onmessage([&model_manager](crow::websocket::connection& conn, const std::string& data, bool is_binary) {
-            std::cout << "Received message: " << data << std::endl;
+        .onmessage([&model_manager, &whisper](crow::websocket::connection& conn, 
+                                            const std::string& data, 
+                                            bool is_binary) {
             try {
-                if (!is_binary && model_manager->getCurrentModel()) {
-                    std::string response = model_manager->getCurrentModel()->generate(data);
-                    std::cout << "Sending response: " << response << std::endl;
+                std::string input_text;
+                
+                if (is_binary) {
+                    if (!whisper) {
+                        conn.send_text("Error: Speech-to-text service not available");
+                        return;
+                    }
+                    
+                    // Save the binary audio data to a temporary WAV file
+                    std::string temp_file = saveTempWavFile(data);
+                    
+                    // Transcribe the audio
+                    try {
+                        input_text = whisper->transcribe(temp_file);
+                        
+                        // Delete temporary file
+                        fs::remove(temp_file);
+                        
+                        // Send transcription to user
+                        conn.send_text("Transcription: " + input_text);
+                    } catch (const std::exception& e) {
+                        fs::remove(temp_file);
+                        conn.send_text("Error transcribing audio: " + std::string(e.what()));
+                        return;
+                    }
+                } else {
+                    // Regular text message
+                    input_text = data;
+                }
+                
+                // Process with LLM if we have text input
+                if (!input_text.empty() && model_manager->getCurrentModel()) {
+                    std::string response = model_manager->getCurrentModel()->generate(input_text);
                     conn.send_text(response);
                 }
             } catch (const std::exception& e) {
                 std::cerr << "Error processing message: " << e.what() << std::endl;
-                conn.send_text("Sorry, I encountered an error processing your message.");
+                conn.send_text("Error processing message: " + std::string(e.what()));
             }
         });
 
@@ -131,7 +189,7 @@ int main() {
         return res;
     });
 
-    // Static file routes last
+    // Static file routes
     CROW_ROUTE(app, "/")
     ([projectPath](const crow::request& req) {
         fs::path indexPath = projectPath / "index.html";
