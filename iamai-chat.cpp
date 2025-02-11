@@ -256,7 +256,7 @@ int main()
 
         std::string name = x["name"].s();
 
-        std::string query = "INSERT INTO Chats (name) VALUES (?, ?)";
+        std::string query = "INSERT INTO Chats (name) VALUES (?)";
         if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
             throw std::runtime_error(sqlite3_errmsg(db));
         }
@@ -310,65 +310,67 @@ int main()
 
     CROW_ROUTE(app, "/chat/message").methods(crow::HTTPMethod::Post)([db](const crow::request &req)
                                                                      {
-        crow::response res;
-        add_cors_headers(res);
-        sqlite3_stmt* stmt = nullptr;
-
-        try {
-            auto x = crow::json::load(req.body);
-            if (!x) {
-                res.code = 400;
-                res.write("{\"error\": \"Invalid JSON\", \"details\": \"Could not parse request body\"}");
-                return res;
-            }
-
-            if (!x.has("chat_id") || !x.has("sender") || !x.has("content")) {
-                res.code = 400;
-                res.write("{\"error\": \"Missing required fields\", \"details\": \"chat_id, sender, and content are required\"}");
-                return res;
-            }
-
-            int chat_id = x["chat_id"].i();
-            std::string sender = x["sender"].s();
-            std::string content = x["content"].s();
-            sqlite3_stmt* check_stmt = nullptr;
-            std::string check_query = "SELECT id FROM Chats WHERE id = ?";
-            if (sqlite3_prepare_v2(db, check_query.c_str(), -1, &check_stmt, nullptr) != SQLITE_OK) {
-                throw std::runtime_error(sqlite3_errmsg(db));
-            }
-            sqlite3_bind_int(check_stmt, 1, chat_id);
-            
-            if (sqlite3_step(check_stmt) != SQLITE_ROW) {
+            crow::response res;
+            add_cors_headers(res);
+            sqlite3_stmt* stmt = nullptr;
+        
+            try {
+                auto x = crow::json::load(req.body);
+                if (!x) {
+                    res.code = 400;
+                    res.write("{\"error\": \"Invalid JSON\"}");
+                    return res;
+                }
+        
+                if (!x.has("chat_id") || !x.has("sender") || !x.has("content")) {
+                    res.code = 400;
+                    res.write("{\"error\": \"Missing required fields\"}");
+                    return res;
+                }
+        
+                int chat_id = x["chat_id"].i();
+                std::string sender = x["sender"].s();
+                std::string content = x["content"].s();
+        
+                sqlite3_stmt* check_stmt = nullptr;
+                const char* check_query = "SELECT 1 FROM Chats WHERE id = ?";
+                if (sqlite3_prepare_v2(db, check_query, -1, &check_stmt, nullptr) != SQLITE_OK) {
+                    throw std::runtime_error(sqlite3_errmsg(db));
+                }
+                sqlite3_bind_int(check_stmt, 1, chat_id);
+                
+                if (sqlite3_step(check_stmt) != SQLITE_ROW) {
+                    sqlite3_finalize(check_stmt);
+                    res.code = 404;
+                    res.write("{\"error\": \"Chat not found\"}");
+                    return res;
+                }
                 sqlite3_finalize(check_stmt);
-                res.code = 404;
-                res.write("{\"error\": \"Chat not found\", \"details\": \"No chat exists with the provided ID\"}");
-                return res;
+        
+                const char* insert_query = "INSERT INTO Messages (chat_id, sender, message) VALUES (?, ?, ?)";
+                if (sqlite3_prepare_v2(db, insert_query, -1, &stmt, nullptr) != SQLITE_OK) {
+                    throw std::runtime_error(sqlite3_errmsg(db));
+                }
+        
+                sqlite3_bind_int(stmt, 1, chat_id);
+                sqlite3_bind_text(stmt, 2, sender.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(stmt, 3, content.c_str(), -1, SQLITE_TRANSIENT);
+        
+                if (sqlite3_step(stmt) != SQLITE_DONE) {
+                    throw std::runtime_error(sqlite3_errmsg(db));
+                }
+        
+                int64_t message_id = sqlite3_last_insert_rowid(db);
+                res.code = 200;
+                res.write("{\"id\": " + std::to_string(message_id) + "}");
+        
+            } catch (const std::exception& e) {
+                res.code = 500;
+                res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
             }
-            sqlite3_finalize(check_stmt);
-
-            std::string query = "INSERT INTO Messages (chat_id, sender, message) VALUES (?, ?, ?)";
-            if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-                throw std::runtime_error(sqlite3_errmsg(db));
-            }
-
-            sqlite3_bind_int(stmt, 1, chat_id);
-            sqlite3_bind_text(stmt, 2, sender.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 3, content.c_str(), -1, SQLITE_TRANSIENT);
-
-            if (sqlite3_step(stmt) != SQLITE_DONE) {
-                throw std::runtime_error(sqlite3_errmsg(db));
-            }
-
-            int64_t message_id = sqlite3_last_insert_rowid(db);
-            res.code = 200;
-            res.write("{\"status\": \"success\", \"message_id\": " + std::to_string(message_id) + "}");
-        } catch (const std::exception& e) {
-            res.code = 500;
-            res.write("{\"error\": \"Server error\", \"details\": \"" + std::string(e.what()) + "\"}");
-        }
-
-        if (stmt) sqlite3_finalize(stmt);
-        return res; });
+        
+            if (stmt) sqlite3_finalize(stmt);
+            return res; });
 
     CROW_ROUTE(app, "/chat/messages").methods(crow::HTTPMethod::Get)([db](const crow::request &req)
                                                                      {
@@ -410,105 +412,134 @@ int main()
         if (stmt) sqlite3_finalize(stmt);
         return res; });
 
-    CROW_ROUTE(app, "/settings/save").methods(crow::HTTPMethod::Options)([](const crow::request &req)
-                                                                         {
-    std::cout << "Handling OPTIONS request for /settings/save" << std::endl;
-    crow::response res;
-    add_cors_headers(res);
-    res.code = 204;
-    return res; });
-
-    CROW_ROUTE(app, "/settings/save").methods(crow::HTTPMethod::Post)([db](const crow::request &req) {
-    crow::response res;
-    add_cors_headers(res);
-    sqlite3_stmt* stmt = nullptr;
-    try {
-        auto x = crow::json::load(req.body);
-        if (!x) {
-            res.code = 400;
-            res.write("{\"error\": \"Invalid JSON\"}");
-            return res;
-        }
-
-        std::string header_color = x["headerColor"].s();
-        std::string gradient_color = x["gradientColor"].s();
-        std::string text_speed = x["textSpeed"].s();
-        std::string model = x["model"].s();
-        int font_size = x["fontSize"].i();
-        bool is_gradient = x["isGradient"].b();
-
-        std::string query = R"(
-            INSERT INTO Settings (header_color, gradient_color, text_speed, model, font_size, run_time, is_gradient)
-            VALUES (?, ?, ?, ?, datetime('now'), ?)
-        )";
-
-        if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-            throw std::runtime_error(sqlite3_errmsg(db));
-        }
-
-        sqlite3_bind_text(stmt, 1, header_color.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, gradient_color.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 3, text_speed.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 4, model.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 5, font_size);
-        sqlite3_bind_int(stmt, 6, is_gradient ? 1 : 0);
-
-        if (sqlite3_step(stmt) != SQLITE_DONE) {
-            throw std::runtime_error(sqlite3_errmsg(db));
-        }
-
-        res.code = 200;
-        res.write("{\"message\": \"Settings saved successfully\"}");
-    }
-    catch (const std::exception& e) {
-        res.code = 500;
-        res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
-    }
-
-    if (stmt) {
-        sqlite3_finalize(stmt);
-    }
-    return res;
-});
+    CROW_ROUTE(app, "/settings/save").methods(crow::HTTPMethod::Post)([db](const crow::request &req)
+                                                                      {
+            crow::response res;
+            add_cors_headers(res);
+            sqlite3_stmt* stmt = nullptr;
+            try {
+                auto x = crow::json::load(req.body);
+                if (!x) {
+                    res.code = 400;
+                    res.write("{\"error\": \"Invalid JSON\"}");
+                    return res;
+                }
+                if (!x.has("headerColor") || !x.has("gradientColor") || 
+                    !x.has("textSpeed") || !x.has("fontSize") || 
+                    !x.has("model") || !x.has("isGradient")) {
+                    res.code = 400;
+                    res.write("{\"error\": \"Missing required fields\"}");
+                    return res;
+                }
+        
+                std::string header_color = x["headerColor"].s();
+                std::string gradient_color = x["gradientColor"].s();
+                int text_speed = x["textSpeed"].i();
+                int font_size = x["fontSize"].i();
+                std::string model = x["model"].s();
+                bool is_gradient = x["isGradient"].b();
+        
+                const char* query = R"(
+                    INSERT INTO Settings (
+                        header_color, 
+                        gradient_color, 
+                        text_speed, 
+                        font_size, 
+                        model, 
+                        run_time,
+                        is_gradient
+                    ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+                )";
+        
+                if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) {
+                    throw std::runtime_error(sqlite3_errmsg(db));
+                }
+        
+                sqlite3_bind_text(stmt, 1, header_color.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(stmt, 2, gradient_color.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_int(stmt, 3, text_speed);
+                sqlite3_bind_int(stmt, 4, font_size);
+                sqlite3_bind_text(stmt, 5, model.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_int(stmt, 6, is_gradient ? 1 : 0);
+        
+                if (sqlite3_step(stmt) != SQLITE_DONE) {
+                    throw std::runtime_error(sqlite3_errmsg(db));
+                }
+        
+                res.code = 200;
+                res.write("{\"message\": \"Settings saved successfully\", \"id\": " + 
+                         std::to_string(sqlite3_last_insert_rowid(db)) + "}");
+            }
+            catch (const std::exception& e) {
+                res.code = 500;
+                res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
+            }
+        
+            if (stmt) {
+                sqlite3_finalize(stmt);
+            }
+            return res; });
 
     CROW_ROUTE(app, "/settings/load").methods(crow::HTTPMethod::Get)([db]()
                                                                      {
-        crow::response res;
-        sqlite3_stmt* stmt = nullptr;
-        try {
-            std::string query = R"(
-                SELECT * FROM Settings ORDER BY id DESC LIMIT 1
-            )";
-
-            if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-                throw std::runtime_error(sqlite3_errmsg(db));
+            crow::response res;
+            add_cors_headers(res);
+            sqlite3_stmt* stmt = nullptr;
+            try {
+                const char* query = R"(
+                    SELECT 
+                        id,
+                        header_color,
+                        gradient_color,
+                        text_speed,
+                        font_size,
+                        model,
+                        run_time,
+                        is_gradient
+                    FROM Settings 
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                )";
+        
+                if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) {
+                    throw std::runtime_error(sqlite3_errmsg(db));
+                }
+        
+                if (sqlite3_step(stmt) == SQLITE_ROW) {
+                    crow::json::wvalue settings;
+                    settings["id"] = sqlite3_column_int(stmt, 0);
+                    settings["headerColor"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
+                    settings["gradientColor"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
+                    settings["textSpeed"] = sqlite3_column_int(stmt, 3);
+                    settings["fontSize"] = sqlite3_column_int(stmt, 4);
+                    settings["model"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
+                    settings["runTime"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
+                    settings["isGradient"] = (sqlite3_column_int(stmt, 7) != 0);
+        
+                    res.code = 200;
+                    res.write(settings.dump());
+                } else {
+                    crow::json::wvalue default_settings;
+                    default_settings["headerColor"] = "#164194";
+                    default_settings["gradientColor"] = "#164194";
+                    default_settings["textSpeed"] = 1000;
+                    default_settings["fontSize"] = 16;
+                    default_settings["model"] = "default";
+                    default_settings["isGradient"] = false;
+                    
+                    res.code = 200;
+                    res.write(default_settings.dump());
+                }
             }
-
-            if (sqlite3_step(stmt) == SQLITE_ROW) {
-                crow::json::wvalue result;
-                result["id"] = sqlite3_column_int(stmt, 0);
-                result["header_color"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
-                result["gradient_color"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
-                result["text_speed"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)));
-                result["font_size"] = sqlite3_column_int(stmt, 4);
-                result["model"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
-                result["run_time"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
-                res.write(result.dump());
-                res.code = 200;
-            } else {
-                res.code = 404;
-                res.write("{\"error\": \"No settings found\"}");
+            catch (const std::exception& e) {
+                res.code = 500;
+                res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
             }
-        }
-        catch (const std::exception& e) {
-            res.code = 500;
-            res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
-        }
-
-        if (stmt) {
-            sqlite3_finalize(stmt);
-        }
-        return res; });
+        
+            if (stmt) {
+                sqlite3_finalize(stmt);
+            }
+            return res; });
 
     CROW_WEBSOCKET_ROUTE(app, "/ws")
         .onopen([](crow::websocket::connection &conn)

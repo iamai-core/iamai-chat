@@ -102,7 +102,7 @@ function ChatApp() {
         try {
             const response = await fetch(`${CONFIG.API_BASE_URL}/chats`);
             const data = await response.json();
-            
+
             if (response.ok) {
                 setChats(data);
                 if (data.length > 0 && !currentChatId) {
@@ -122,7 +122,7 @@ function ChatApp() {
         try {
             const response = await fetch(`${CONFIG.API_BASE_URL}/chat/messages?chat_id=${chatId}`);
             const data = await response.json();
-            
+
             if (response.ok) {
                 const formattedMessages = data.map(msg => ({
                     message: msg.content,
@@ -140,12 +140,12 @@ function ChatApp() {
 
     const addNewChat = async () => {
         const chatName = prompt("Enter a name for your new chat:");
-    
+
         if (!chatName) {
             alert("Chat creation canceled. Chat name required.");
             return;
         }
-    
+
         try {
             const response = await fetch(`${CONFIG.API_BASE_URL}/chat`, {
                 method: 'POST',
@@ -156,9 +156,9 @@ function ChatApp() {
                     name: chatName,
                 })
             });
-    
+
             const data = await response.json();
-            
+
             if (response.ok) {
                 setChats(prev => [...prev, data]);
                 setCurrentChatId(data.id);
@@ -185,7 +185,7 @@ function ChatApp() {
                     content
                 })
             });
-            
+
             if (!response.ok) {
                 console.error('Failed to save message:', await response.json());
             }
@@ -208,7 +208,7 @@ function ChatApp() {
 
             setMessages(prev => [...prev, newMessage]);
             await saveMessageToDatabase(currentChatId, 'user', message);
-            
+
             setUserInput("");
             setIsTyping(true);
             setAiStatus('thinking');
@@ -278,13 +278,30 @@ function ChatApp() {
                     <img className="logo" src={logo} alt="Logo" />
                 </div>
             </header>
-            <MainContainer className="chat-main">
-                <ChatContainer className="chat-container">
+            <MainContainer className="chat-main" style={{ fontSize: `${messageFontSize}px` }}>
+                <ChatContainer className="chat-container" style={{ fontSize: `${messageFontSize}px` }}>
                     <MessageList
                         scrollBehavior="smooth"
-                        typingIndicator={isTyping ? <TypingIndicator content="Aimi is typing..." /> : null}>
+                        typingIndicator={isTyping ?
+                            <TypingIndicator
+                                content="Aimi is typing..."
+                                style={{ fontSize: `${messageFontSize}px` }}
+                            /> : null
+                        }
+                        style={{ fontSize: `${messageFontSize}px` }}
+                    >
                         {messages.map((message, i) => (
-                            <Message key={i} model={{ ...message, style: { fontSize: `${messageFontSize}px` } }} />
+                            <Message
+                                key={i}
+                                model={{
+                                    ...message,
+                                    style: {
+                                        fontSize: `${messageFontSize}px`,
+                                        '--message-content-font-size': `${messageFontSize}px`,
+                                        '--message-metadata-font-size': `${messageFontSize - 2}px`
+                                    }
+                                }}
+                            />
                         ))}
                     </MessageList>
                     <MessageInput
