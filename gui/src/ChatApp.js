@@ -29,6 +29,8 @@ const CONFIG = {
     WS_URL: process.env.REACT_APP_WS_URL || 'ws://localhost:8080/ws'
 };
 
+var renderType = "text";
+
 
 function ChatApp() {
     const { headerColor, messageFontSize, messageSpeed } = useContext(AppContext);
@@ -79,7 +81,11 @@ function ChatApp() {
                     const newMessage = {
                         message: response.content,
                         direction: 'incoming',
-                        sender: "AI"
+                        sender: "AI",
+                        attachment: {
+                            type: "text",
+                            src: null
+                        }
                     };
                     setMessages(prev => [...prev, newMessage]);
                     saveMessageToDatabase(currentChatId, 'AI', response.content);
@@ -127,7 +133,11 @@ function ChatApp() {
                 const formattedMessages = data.map(msg => ({
                     message: msg.content,
                     direction: msg.sender === 'user' ? 'outgoing' : 'incoming',
-                    sender: msg.sender
+                    sender: msg.sender,
+                    attachment: {
+                        type: renderType,
+                        src: msg.Src
+                    }
                 }));
                 setMessages(formattedMessages);
             } else {
@@ -193,7 +203,7 @@ function ChatApp() {
             console.error('Error saving message:', error);
         }
     };
-    const handleSend = async (message) => {
+    const handleSend = async (message, isAttachment = false, Src = null) => {
         if (!isConnected || !currentChatId) {
             setError("Not connected or no chat selected");
             return;
@@ -203,8 +213,16 @@ function ChatApp() {
             const newMessage = {
                 message,
                 direction: 'outgoing',
-                sender: "user"
+                sender: "user",
+                attachment: {
+                    type: "text",
+                    src: Src
+                }
             };
+            if (isAttachment == true) {
+                newMessage.attachment.type = renderType;
+                newMessage.message = message['name'];
+            }
 
             setMessages(prev => [...prev, newMessage]);
             await saveMessageToDatabase(currentChatId, 'user', message);
@@ -230,6 +248,12 @@ function ChatApp() {
         }
     };
 
+    function setRenderType(file) {
+        renderType = file['type'];
+        renderType = renderType.split('/')[0].toLowerCase()
+        console.log(renderType);
+    };
+
     const handleChatSwitch = (chatId) => {
         setCurrentChatId(chatId);
         setMessages([]);
@@ -240,23 +264,18 @@ function ChatApp() {
 
     const HandleFileChange = (event) => {
         const file = event.target.files[0];
+        setRenderType(file);
         if (file) {
             const reader = new FileReader();
             reader.onload = () => {
-                handleSend(file.name, true, { type: file.type.split('/')[0], src: reader.result });
+                handleSend(file.name, true,  reader.result);
             };
             reader.readAsDataURL(file);
-            toggleAttach();
         }
+        toggleAttach();
     };
 
-    const toggleMenu = () => setIsMenuOpen(prev => !prev);
     const toggleAttach = () => setAttachFile(prev => !prev);
-
-    const handleInputChange = (innerHtml, textContent) => {
-        setUserInput(textContent);
-        setAiStatus(textContent ? 'listening' : 'idle');
-    };
 
     const getAiImage = () => {
         switch (aiStatus) {
@@ -290,19 +309,31 @@ function ChatApp() {
                         }
                         style={{ fontSize: `${messageFontSize}px` }}
                     >
-                        {messages.map((message, i) => (
-                            <Message
-                                key={i}
-                                model={{
-                                    ...message,
-                                    style: {
-                                        fontSize: `${messageFontSize}px`,
-                                        '--message-content-font-size': `${messageFontSize}px`,
-                                        '--message-metadata-font-size': `${messageFontSize - 2}px`
-                                    }
-                                }}
-                            />
-                        ))}
+                        {messages.map((message, i) => {
+                            if (message.attachment) {
+                                const { type, src } = message.attachment;
+                                if (type === "image") {
+                                    return (<img key={i} src={src} alt="attachment" style={{ maxWidth: '30%', marginLeft: '70%' }} />);
+                                } else if (type === "video") {
+                                    return (
+                                        <video key={i} src={src} controls style={{ maxWidth: '30%', marginLeft: '70%' }} />
+                                    );
+                                }
+                            }
+                            return (
+                                <Message
+                                    key={i}
+                                    model={{
+                                        ...message,
+                                        style: {
+                                            fontSize: `${messageFontSize}px`,
+                                            '--message-content-font-size': `${messageFontSize}px`,
+                                            '--message-metadata-font-size': `${messageFontSize - 2}px`
+                                        }
+                                    }}
+                                />
+                            );
+                        })}
                     </MessageList>
                     <MessageInput
                         className="chat-input"
