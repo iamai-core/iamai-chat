@@ -186,22 +186,6 @@ int main()
         return 1;
     }
 
-    CROW_ROUTE(app, "/models").methods(crow::HTTPMethod::Options)([](const crow::request &req)
-                                                                  {
-        std::cout << "Handling OPTIONS request for /models" << std::endl;
-        crow::response res;
-        add_cors_headers(res);
-        res.code = 204;
-        return res; });
-
-    CROW_ROUTE(app, "/models/switch").methods(crow::HTTPMethod::Options)([](const crow::request &req)
-                                                                         {
-        std::cout << "Handling OPTIONS request for /models/switch" << std::endl;
-        crow::response res;
-        add_cors_headers(res);
-        res.code = 204;
-        return res; });
-
     CROW_ROUTE(app, "/api/models").methods(crow::HTTPMethod::Get)([&model_manager]()
                                                                   {
         crow::response res;
@@ -210,35 +194,32 @@ int main()
         res.write(response_body.dump());
         res.code = 200;
         res.set_header("Content-Type", "application/json");
-        add_cors_headers(res);
-        
-        std::cout << "Returning models response with body: " << response_body.dump() << std::endl;
         return res; });
 
     CROW_ROUTE(app, "/api/models/switch").methods(crow::HTTPMethod::Post)([&model_manager](const crow::request &req)
                                                                           {
-        crow::response res;
-        res.set_header("Content-Type", "application/json");
-        try {
-            auto x = crow::json::load(req.body);
-            if (!x) {
-                res.code = 400;
-                res.write("{\"error\": \"Invalid JSON\"}");
-                 return res;
-            }
-            std::string model_name = x["model"].s();
-            if (model_manager->switchModel(model_name)) {
-                res.code = 200;
-                res.write("{\"message\": \"Model switched successfully\"}");
-            } else {
-                res.code = 400;
-                res.write("{\"error\": \"Failed to switch model\"}");
-            }
-        } catch (const std::exception& e) {
-            res.code = 500;
-            res.write("{\"error\": \"Internal server error\"}");
+            crow::response res;
+            res.set_header("Content-Type", "application/json");
+            try {
+                auto x = crow::json::load(req.body);
+                if (!x) {
+                    res.code = 400;
+                    res.write("{\"error\": \"Invalid JSON\"}");
                     return res;
-        } });
+                }
+                std::string model_name = x["model"].s();
+                if (model_manager->switchModel(model_name)) {
+                    res.code = 200;
+                    res.write("{\"message\": \"Model switched successfully\"}");
+                } else {
+                    res.code = 400;
+                    res.write("{\"error\": \"Failed to switch model\"}");
+                }
+            } catch (const std::exception& e) {
+                res.code = 500;
+                res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
+            }
+            return res; });
 
     CROW_ROUTE(app, "/chat").methods(crow::HTTPMethod::Post)([db](const crow::request &req)
                                                              {
