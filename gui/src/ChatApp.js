@@ -23,6 +23,7 @@ import close_Img from "./assets/close_btn.PNG";
 import file_Icon from "./assets/file_inpt.PNG";
 import img_Icon from "./assets/img_inpt.PNG";
 import vid_Icon from "./assets/video_inpt.PNG";
+import mic_Icon from "./assets/video_inpt.PNG";
 
 const CONFIG = {
     API_BASE_URL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080',
@@ -45,6 +46,9 @@ function ChatApp() {
     const [messages, setMessages] = useState([]);
     const [error, setError] = useState(null);
     const wsRef = useRef(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
 
     useEffect(() => {
         loadChats();
@@ -101,6 +105,46 @@ function ChatApp() {
             setIsConnected(false);
             console.log("WebSocket disconnected");
         };
+    };
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorderRef.current = new MediaRecorder(stream);
+            audioChunksRef.current = [];
+
+            mediaRecorderRef.current.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorderRef.current.onstop = () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+                const reader = new FileReader();
+                reader.onload = () => {
+                    handleSend('Audio message', true, reader.result);
+                };
+                reader.readAsDataURL(audioBlob);
+                audioChunksRef.current = [];
+            };
+
+            mediaRecorderRef.current.start();
+            setIsRecording(true);
+            setAiStatus('listening');
+        } catch (error) {
+            console.error('Error accessing microphone:', error);
+            alert('Unable to access microphone. Please check your permissions.');
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+            setIsRecording(false);
+            setAiStatus('idle');
+        }
     };
 
 
@@ -335,19 +379,41 @@ function ChatApp() {
                             );
                         })}
                     </MessageList>
-                    <MessageInput
-                        className="chat-input"
-                        placeholder="What's on your mind?"
-                        value={userInput}
-                        onChange={(html, text) => {
-                            setUserInput(text);
-                            setAiStatus(text ? 'listening' : 'idle');
-                        }}
-                        onSend={handleSend}
-                        disabled={isTyping || !isConnected}
-                        style={{ fontSize: `${messageFontSize}px` }}
-                        onAttachClick={() => setAttachFile(prev => !prev)}
+                                    <MessageInput
+                    className="chat-input"
+                    placeholder="What's on your mind?"
+                    value={userInput}
+                    onChange={(html, text) => {
+                        setUserInput(text);
+                        setAiStatus(text ? 'listening' : 'idle');
+                    }}
+                    onSend={handleSend}
+                    disabled={isTyping || !isConnected}
+                    style={{ fontSize: `${messageFontSize}px`, flex: 1 }}
+                    onAttachClick={() => setAttachFile(prev => !prev)}
+                />
+                <button
+                    className={`mic-button ${isRecording ? 'recording' : ''}`}
+                    onClick={isRecording ? stopRecording : startRecording}
+                    style={{
+                        marginLeft: '10px',
+                        padding: '8px',
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: isRecording ? '#ff4444' : '#f0f0f0',
+                        cursor: 'pointer'
+                    }}
+                >
+                    <img 
+                        src={mic_Icon} 
+                        alt="Microphone" 
+                        style={{ 
+                            width: '20px', 
+                            height: '20px',
+                            filter: isRecording ? 'invert(1)' : 'none'
+                        }} 
                     />
+                </button>
                 </ChatContainer>
             </MainContainer>
 
