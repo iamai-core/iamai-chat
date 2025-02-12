@@ -20,8 +20,10 @@ function Settings() {
         messageSpeed,
         setMessageSpeed,
         currentModel,
-        setCurrentModel
+        setCurrentModel,
+        saveSettings
     } = useContext(AppContext);
+    
     const [hsva, setHsva] = useState({ h: 214, s: 43, v: 90, a: 1 });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -34,39 +36,59 @@ function Settings() {
 
     useEffect(() => {
         fetchModels();
+        loadSettings();
     }, []);
 
-    useEffect(() => {
-        const loadSettings = async () => {
-            try {
-                const response = await axios.get('http://localhost:8080/settings/load');
-                const settings = response.data;
-                if (settings.header_color?.includes('linear-gradient')) {
-                    setIsGradient(true);
-                    const colorMatch = settings.header_color.match(/linear-gradient\(([^)]+)\)/);
-                    if (colorMatch) {
-                        const gradientParts = colorMatch[1].split(',').map(part => part.trim());
-                        setGradientColors(gradientParts.slice(1));
-                        setHeaderColor(settings.header_color);
-                    }
-                } else {
-                    setIsGradient(false);
-                    setHeaderColor(settings.header_color || '#164194');
+    const loadSettings = async () => {
+        try {
+            const response = await axios.get('http://localhost:8080/settings/load');
+            const settings = response.data;
+            
+            if (settings.headerColor?.includes('linear-gradient')) {
+                setIsGradient(true);
+                const colorMatch = settings.headerColor.match(/linear-gradient\(([^)]+)\)/);
+                if (colorMatch) {
+                    const gradientParts = colorMatch[1].split(',').map(part => part.trim());
+                    setGradientColors(gradientParts.slice(1));
+                    setHeaderColor(settings.headerColor);
                 }
-                
-                setMessageFontSize(settings.font_size);
-                setMessageSpeed(parseInt(settings.text_speed));
-                setSelectedRuntime(settings.text_speed || "Select Run Time");
-                if (settings.model) {
-                    setCurrentModel(settings.model);
-                }
-            } catch (err) {
-                console.error('Failed to load settings:', err);
+            } else {
+                setIsGradient(false);
+                setHeaderColor(settings.headerColor || '#164194');
             }
-        };
+            
+            setMessageFontSize(settings.fontSize || 16);
+            setMessageSpeed(settings.textSpeed || 1000);
+            setSelectedRuntime ("Select Run Time");
+            if (settings.model) {
+                setCurrentModel(settings.model);
+            }
+        } catch (err) {
+            console.error('Failed to load settings:', err);
+            setSaveError('Failed to load settings');
+        }
+    };
+    
 
-        loadSettings();
-    }, [setHeaderColor, setMessageFontSize, setMessageSpeed, setCurrentModel]);
+    const handleSaveSettings = async () => {
+        try {
+            setSavingSettings(true);
+            setSaveError(null);
+            await saveSettings();
+        } catch (err) {
+            setSaveError('Failed to save settings: ' + err.message);
+        } finally {
+            setSavingSettings(false);
+        }
+    };
+
+    useEffect(() => {
+        const saveTimeout = setTimeout(() => {
+            handleSaveSettings();
+        }, 500);
+
+        return () => clearTimeout(saveTimeout);
+    }, [headerColor, messageFontSize, messageSpeed, currentModel, isGradient]);
 
     const fetchModels = async () => {
         try {
@@ -99,15 +121,7 @@ function Settings() {
             }
 
             setCurrentModel(modelName);
-            
-            await axios.post('http://localhost:8080/settings/save', {
-                headerColor,
-                gradientColor: isGradient ? gradientColors.join(', ') : headerColor,
-                textSpeed: messageSpeed.toString(),
-                fontSize: messageFontSize,
-                model: modelName,
-                isGradient
-            });
+            handleSaveSettings();
         } catch (err) {
             setError('Failed to switch model: ' + err.message);
             await fetchModels();
@@ -129,6 +143,11 @@ function Settings() {
 
     const handleSpeedChange = (value) => {
         setMessageSpeed(value);
+    };
+
+    const handleRuntimeSelect = (runtime) => {
+        setSelectedRuntime(runtime);
+        setMessageSpeed(runtime === "Instant" ? 0 : 1000);
     };
 
     return (
@@ -189,16 +208,16 @@ function Settings() {
                     title={selectedRuntime}
                     variant="success"
                 >
-                    <Dropdown.Item onClick={() => setSelectedRuntime("Realtime")}>
+                    <Dropdown.Item onClick={() => handleRuntimeSelect("Realtime")}>
                         Realtime
                     </Dropdown.Item>
-                    <Dropdown.Item onClick={() => setSelectedRuntime("Instant")}>
+                    <Dropdown.Item onClick={() => handleRuntimeSelect("Instant")}>
                         Instant
                     </Dropdown.Item>
                 </DropdownButton>
             </div>
 
-            {/* Header Color */}
+            {/* Color Picker */}
             <div className="settings-section">
                 <label htmlFor="header-color">Header Color:</label>
                 <div className="color-mode-toggle">
@@ -216,28 +235,19 @@ function Settings() {
                     </button>
                 </div>
                 <div className="color-wheel-container">
-                    {isGradient ? (
-                        <Wheel
-                            className="color-wheel-gradient"
-                            color={hsva}
-                            onChange={(color) => {
-                                setHsva({ ...hsva, ...color.hsva });
+                    <Wheel
+                        className={isGradient ? "color-wheel-gradient" : "color-wheel"}
+                        color={hsva}
+                        onChange={(color) => {
+                            setHsva({ ...hsva, ...color.hsva });
+                            if (isGradient) {
                                 const newGradient = generateGradient(color.hsva.h, color.hsva.s, color.hsva.v);
                                 setHeaderColor(newGradient);
-                            }}
-                            title="Gradient Color Picker"
-                        />
-                    ) : (
-                        <Wheel
-                            className="color-wheel"
-                            color={hsva}
-                            onChange={(color) => {
-                                setHsva({ ...hsva, ...color.hsva });
+                            } else {
                                 setHeaderColor(hsvaToHex(color.hsva));
-                            }}
-                            title="Solid Color Picker"
-                        />
-                    )}
+                            }
+                        }}
+                    />
                 </div>
                 <div
                     className="color-preview"
@@ -250,7 +260,7 @@ function Settings() {
                 />
             </div>
 
-            {/* Font Size */}
+            {/* Font Size Slider */}
             <div className="settings-section">
                 <label htmlFor="font-slider">Message Font Size:</label>
                 <ReactSlider
@@ -268,9 +278,9 @@ function Settings() {
                 <p>Current Size: {messageFontSize}px</p>
             </div>
 
-            {/* Message Speed */}
+            {/* Message Speed Slider */}
             <div className="settings-section">
-                <label htmlFor="speed-slider">Text to Speech Speed:</label>
+            <label htmlFor="speed-slider">Text to Speech Speed:</label>
                 <ReactSlider
                     id="speed-slider"
                     className="speed-slider"
@@ -279,7 +289,7 @@ function Settings() {
                     markClassName="slider-mark"
                     marks={5}
                     min={0}
-                    max={100}
+                    max={2000}
                     value={messageSpeed}
                     onChange={handleSpeedChange}
                 />
