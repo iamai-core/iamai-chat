@@ -27,8 +27,9 @@ set(GGML_CUDA ON CACHE BOOL "Enable CUDA" FORCE)
 set(GGML_METAL OFF CACHE BOOL "disable Metal" FORCE)
 set(GGML_OPENBLAS OFF CACHE BOOL "disable OpenBLAS" FORCE)
 
-# Add llama.cpp subdirectory
+# Add llama.cpp and whisper.cpp subdirectories
 add_subdirectory(${CMAKE_SOURCE_DIR}/iamai-core/llama.cpp ${CMAKE_BINARY_DIR}/llama.cpp)
+add_subdirectory(${CMAKE_SOURCE_DIR}/iamai-core/whisper.cpp ${CMAKE_BINARY_DIR}/whisper.cpp)
 
 # Windows specific settings for Crow/ASIO
 if(WIN32)
@@ -50,6 +51,7 @@ add_executable(iamai-chat
     iamai-chat.cpp
     iamai-core/core/interface.cpp
     iamai-core/core/folder_manager.cpp
+    iamai-core/core/whisper_interface.cpp
 )
 
 # Add include directories
@@ -57,12 +59,14 @@ target_include_directories(iamai-chat
     PUBLIC
     ${CMAKE_SOURCE_DIR}/include  # For Crow headers
     ${CMAKE_SOURCE_DIR}/iamai-core  # For iamai-core headers
+    ${CMAKE_SOURCE_DIR}/iamai-core/whisper.cpp  # For whisper headers
 )
 
 # Link all libraries
 target_link_libraries(iamai-chat
     PRIVATE
     llama
+    whisper
     Crow
     ${SHELL32_LIBRARY}
     ${OLE32_LIBRARY}
