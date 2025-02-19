@@ -92,7 +92,7 @@ function ChatApp() {
                         }
                     };
                     setMessages(prev => [...prev, newMessage]);
-                    saveMessageToDatabase(currentChatId, 'AI', response.content);
+                    saveMessageToDatabase(currentChatId, 'AI', response.content, false, "text");
                     setAiStatus('speaking');
                     setTimeout(() => setAiStatus('idle'), 1000);
                 }
@@ -123,7 +123,7 @@ function ChatApp() {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
                 const reader = new FileReader();
                 reader.onload = () => {
-                    handleSend('Audio message', true, reader.result);
+                    handleSend(reader.result, true);
                 };
                 reader.readAsDataURL(audioBlob);
                 audioChunksRef.current = [];
@@ -205,7 +205,7 @@ function ChatApp() {
             console.error('Error creating chat:', error);
         }
     };
-    const saveMessageToDatabase = async (chatId, sender, content) => {
+    const saveMessageToDatabase = async (chatId, sender, content, is_attachment, file_type) => {
         try {
             const response = await fetch(`${CONFIG.API_BASE_URL}/chat/message`, {
                 method: 'POST',
@@ -216,7 +216,8 @@ function ChatApp() {
                     chat_id: chatId,
                     sender,
                     content,
-                    is_attachment: false  // Add this line to match backend
+                    is_attachment,
+                    file_type
                 })
             });
     
@@ -228,7 +229,7 @@ function ChatApp() {
         }
     };
     
-    const handleSend = async (message, isAttachment = false, Src = null) => {
+    const handleSend = async (message, isAttachment = false) => {
         if (!isConnected || !currentChatId) {
             setError("Not connected or no chat selected");
             return;
@@ -241,16 +242,15 @@ function ChatApp() {
                 sender: "user",
                 attachment: {
                     type: "text",
-                    src: Src
+                    src: message
                 }
             };
             if (isAttachment == true) {
                 newMessage.attachment.type = renderType;
-                newMessage.message = message['name'];
             }
     
             setMessages(prev => [...prev, newMessage]);
-            await saveMessageToDatabase(currentChatId, 'user', message);
+            await saveMessageToDatabase(currentChatId, 'user', message, Boolean(isAttachment), newMessage.attachment.type);
     
             setUserInput("");
             setIsTyping(true);
@@ -259,7 +259,7 @@ function ChatApp() {
             if (wsRef.current?.readyState === WebSocket.OPEN) {
                 wsRef.current.send(JSON.stringify({
                     type: 'message',
-                    content: message,
+                    content: ((isAttachment === true) ? "This file is an attachment" : message),
                     chatId: currentChatId
                 }));
             } else {
@@ -284,10 +284,11 @@ function ChatApp() {
                     direction: msg.sender === 'user' ? 'outgoing' : 'incoming',
                     sender: msg.sender,
                     attachment: {
-                        type: msg.is_attachment ? renderType : "text",
-                        src: null
+                        type: msg.file_type,
+                        src: ((msg.is_attachment) ? msg.content : null)
                     }
                 }));
+                data.map(msg => (console.log(msg)));
                 setMessages(formattedMessages);
             } else {
                 console.error('Failed to load messages:', data.error);
@@ -317,7 +318,7 @@ function ChatApp() {
         if (file) {
             const reader = new FileReader();
             reader.onload = () => {
-                handleSend(file.name, true,  reader.result);
+                handleSend(reader.result, true);
             };
             reader.readAsDataURL(file);
             toggleAttach();

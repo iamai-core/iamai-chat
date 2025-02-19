@@ -74,6 +74,7 @@ sqlite3 *initializeDatabase()
             sender TEXT NOT NULL,
             message TEXT NOT NULL,
             is_attachment BOOLEAN NOT NULL,
+            file_type Text NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (chat_id) REFERENCES Chats(id) ON DELETE CASCADE
         );
@@ -304,7 +305,7 @@ int main()
                     return res;
                 }
         
-                if (!x.has("chat_id") || !x.has("sender") || !x.has("content") || !x.has("is_attachment")) {
+                if (!x.has("chat_id") || !x.has("sender") || !x.has("content") || !x.has("is_attachment") || !x.has("file_type")) {
                     res.code = 400;
                     res.write("{\"error\": \"Missing required fields\"}");
                     return res;
@@ -313,11 +314,13 @@ int main()
                 std::string sender = x["sender"].s();
                 std::string content = x["content"].s();
                 int is_attachment = x["is_attachment"].b() ? 1 : 0;
+                std::string file_type = x["file_type"].s();
                 std::cout << "Inserting message: " << std::endl;
                 std::cout << "chat_id: " << chat_id << std::endl;
                 std::cout << "sender: " << sender << std::endl;
                 std::cout << "content: " << content << std::endl;
                 std::cout << "is_attachment: " << is_attachment << std::endl;
+                std::cout << "file_type: " << file_type << std::endl;
 
                 sqlite3_stmt* check_stmt = nullptr;
                 const char* check_query = "SELECT 1 FROM Chats WHERE id = ?";
@@ -334,7 +337,7 @@ int main()
                 }
                 sqlite3_finalize(check_stmt);
         
-                const char* insert_query = "INSERT INTO Messages (chat_id, sender, message, is_attachment) VALUES (?, ?, ?, ?)";
+                const char* insert_query = "INSERT INTO Messages (chat_id, sender, message, is_attachment, file_type) VALUES (?, ?, ?, ?, ?)";
                 if (sqlite3_prepare_v2(db, insert_query, -1, &stmt, nullptr) != SQLITE_OK) {
                     throw std::runtime_error(sqlite3_errmsg(db));
                 }
@@ -343,6 +346,7 @@ int main()
                 sqlite3_bind_text(stmt, 2, sender.c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_text(stmt, 3, content.c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_int(stmt, 4, is_attachment);
+                sqlite3_bind_text(stmt, 5, file_type.c_str(), -1, SQLITE_TRANSIENT);
         
                 if (sqlite3_step(stmt) != SQLITE_DONE) {
                     throw std::runtime_error(sqlite3_errmsg(db));
@@ -374,7 +378,7 @@ int main()
                         return res;
                     }
                     
-                    std::string query = "SELECT id, sender, message, created_at, is_attachment FROM Messages WHERE chat_id = ? ORDER BY created_at ASC";
+                    std::string query = "SELECT id, sender, message, created_at, is_attachment, file_type FROM Messages WHERE chat_id = ? ORDER BY created_at ASC";
                     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
                         throw std::runtime_error(sqlite3_errmsg(db));
                     }
@@ -389,6 +393,7 @@ int main()
                         message["content"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
                         message["created_at"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)));
                         message["is_attachment"] = (sqlite3_column_int(stmt, 4) == 1);
+                        message["file_type"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
                         messages.push_back(std::move(message));
                     }
             
