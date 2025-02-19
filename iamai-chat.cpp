@@ -73,6 +73,7 @@ sqlite3 *initializeDatabase()
             chat_id INTEGER NOT NULL,
             sender TEXT NOT NULL,
             message TEXT NOT NULL,
+            is_attachment BOOLEAN NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (chat_id) REFERENCES Chats(id) ON DELETE CASCADE
         );
@@ -303,16 +304,21 @@ int main()
                     return res;
                 }
         
-                if (!x.has("chat_id") || !x.has("sender") || !x.has("content")) {
+                if (!x.has("chat_id") || !x.has("sender") || !x.has("content") || !x.has("is_attachment")) {
                     res.code = 400;
                     res.write("{\"error\": \"Missing required fields\"}");
                     return res;
                 }
-        
                 int chat_id = x["chat_id"].i();
                 std::string sender = x["sender"].s();
                 std::string content = x["content"].s();
-        
+                int is_attachment = x["is_attachment"].b() ? 1 : 0;
+                std::cout << "Inserting message: " << std::endl;
+                std::cout << "chat_id: " << chat_id << std::endl;
+                std::cout << "sender: " << sender << std::endl;
+                std::cout << "content: " << content << std::endl;
+                std::cout << "is_attachment: " << is_attachment << std::endl;
+
                 sqlite3_stmt* check_stmt = nullptr;
                 const char* check_query = "SELECT 1 FROM Chats WHERE id = ?";
                 if (sqlite3_prepare_v2(db, check_query, -1, &check_stmt, nullptr) != SQLITE_OK) {
@@ -328,14 +334,15 @@ int main()
                 }
                 sqlite3_finalize(check_stmt);
         
-                const char* insert_query = "INSERT INTO Messages (chat_id, sender, message) VALUES (?, ?, ?)";
+                const char* insert_query = "INSERT INTO Messages (chat_id, sender, message, is_attachment) VALUES (?, ?, ?, ?)";
                 if (sqlite3_prepare_v2(db, insert_query, -1, &stmt, nullptr) != SQLITE_OK) {
                     throw std::runtime_error(sqlite3_errmsg(db));
                 }
         
-                sqlite3_bind_int(stmt, 1, chat_id);
+                sqlite3_bind_int64(stmt, 1, chat_id);
                 sqlite3_bind_text(stmt, 2, sender.c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_text(stmt, 3, content.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_int(stmt, 4, is_attachment);
         
                 if (sqlite3_step(stmt) != SQLITE_DONE) {
                     throw std::runtime_error(sqlite3_errmsg(db));
@@ -353,45 +360,48 @@ int main()
             if (stmt) sqlite3_finalize(stmt);
             return res; });
 
-    CROW_ROUTE(app, "/chat/messages").methods(crow::HTTPMethod::Get)([db](const crow::request &req)
-                                                                     {
-        crow::response res;
-        add_cors_headers(res);
-        sqlite3_stmt* stmt = nullptr;
-
-        try {
-            std::string chat_id = req.url_params.get("chat_id");
-            if (chat_id.empty()) {
-                res.code = 400;
-                res.write("{\"error\": \"Missing chat_id parameter\"}");
+            CROW_ROUTE(app, "/chat/messages").methods(crow::HTTPMethod::Get)([db](const crow::request &req)
+            {
+                crow::response res;
+                add_cors_headers(res);
+                sqlite3_stmt* stmt = nullptr;
+            
+                try {
+                    std::string chat_id = req.url_params.get("chat_id");
+                    if (chat_id.empty()) {
+                        res.code = 400;
+                        res.write("{\"error\": \"Missing chat_id parameter\"}");
+                        return res;
+                    }
+                    
+                    std::string query = "SELECT id, sender, message, created_at, is_attachment FROM Messages WHERE chat_id = ? ORDER BY created_at ASC";
+                    if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+                        throw std::runtime_error(sqlite3_errmsg(db));
+                    }
+            
+                    sqlite3_bind_text(stmt, 1, chat_id.c_str(), -1, SQLITE_TRANSIENT);
+            
+                    crow::json::wvalue::list messages;
+                    while (sqlite3_step(stmt) == SQLITE_ROW) {
+                        crow::json::wvalue message;
+                        message["id"] = sqlite3_column_int(stmt, 0);
+                        message["sender"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
+                        message["content"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
+                        message["created_at"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)));
+                        message["is_attachment"] = (sqlite3_column_int(stmt, 4) == 1);
+                        messages.push_back(std::move(message));
+                    }
+            
+                    res.write(crow::json::wvalue(messages).dump());
+                    res.code = 200;
+                } catch (const std::exception& e) {
+                    res.code = 500;
+                    res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
+                }
+            
+                if (stmt) sqlite3_finalize(stmt);
                 return res;
-            }
-
-            std::string query = "SELECT sender, message, created_at FROM Messages WHERE chat_id = ? ORDER BY created_at ASC";
-            if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-                throw std::runtime_error(sqlite3_errmsg(db));
-            }
-
-            sqlite3_bind_text(stmt, 1, chat_id.c_str(), -1, SQLITE_TRANSIENT);
-
-            crow::json::wvalue::list messages;
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                crow::json::wvalue message;
-                message["sender"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
-                message["content"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
-                message["created_at"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
-                messages.push_back(std::move(message));
-            }
-
-            res.write(crow::json::wvalue(messages).dump());
-            res.code = 200;
-        } catch (const std::exception& e) {
-            res.code = 500;
-            res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
-        }
-
-        if (stmt) sqlite3_finalize(stmt);
-        return res; });
+            });
 
     CROW_ROUTE(app, "/settings/save").methods(crow::HTTPMethod::Post)([db](const crow::request &req)
                                                                       {

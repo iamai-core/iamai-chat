@@ -643,19 +643,12 @@ body {
 }
 
 .mic-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 15px;
+  display: flex;
+  align-items: center;
   transition: all 0.3s ease;
-}
-
-.mic-button:hover {
-  background: #e0e0e0 !important;
-}
-
-.mic-button.recording {
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(1); }
+  margin-left: 10px;
 }

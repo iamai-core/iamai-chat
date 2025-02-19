@@ -152,6 +152,7 @@ function ChatApp() {
         try {
             const response = await fetch(`${CONFIG.API_BASE_URL}/chats`);
             const data = await response.json();
+            
 
             if (response.ok) {
                 setChats(data);
@@ -168,37 +169,15 @@ function ChatApp() {
         }
     };
 
-    const loadMessages = async (chatId) => {
-        try {
-            const response = await fetch(`${CONFIG.API_BASE_URL}/chat/messages?chat_id=${chatId}`);
-            const data = await response.json();
-
-            if (response.ok) {
-                const formattedMessages = data.map(msg => ({
-                    message: msg.content,
-                    direction: msg.sender === 'user' ? 'outgoing' : 'incoming',
-                    sender: msg.sender,
-                    attachment: {
-                        type: renderType,
-                        src: msg.Src
-                    }
-                }));
-                setMessages(formattedMessages);
-            } else {
-                console.error('Failed to load messages:', data.error);
-            }
-        } catch (error) {
-            console.error('Error loading messages:', error);
-        }
-    };
-
     const addNewChat = async () => {
         const chatName = prompt("Enter a name for your new chat:");
+    
 
         if (!chatName) {
             alert("Chat creation canceled. Chat name required.");
             return;
         }
+    
 
         try {
             const response = await fetch(`${CONFIG.API_BASE_URL}/chat`, {
@@ -210,9 +189,9 @@ function ChatApp() {
                     name: chatName,
                 })
             });
-
+    
             const data = await response.json();
-
+            
             if (response.ok) {
                 setChats(prev => [...prev, data]);
                 setCurrentChatId(data.id);
@@ -236,10 +215,11 @@ function ChatApp() {
                 body: JSON.stringify({
                     chat_id: chatId,
                     sender,
-                    content
+                    content,
+                    is_attachment: false  // Add this line to match backend
                 })
             });
-
+    
             if (!response.ok) {
                 console.error('Failed to save message:', await response.json());
             }
@@ -247,12 +227,13 @@ function ChatApp() {
             console.error('Error saving message:', error);
         }
     };
+    
     const handleSend = async (message, isAttachment = false, Src = null) => {
         if (!isConnected || !currentChatId) {
             setError("Not connected or no chat selected");
             return;
         }
-
+    
         try {
             const newMessage = {
                 message,
@@ -267,14 +248,14 @@ function ChatApp() {
                 newMessage.attachment.type = renderType;
                 newMessage.message = message['name'];
             }
-
+    
             setMessages(prev => [...prev, newMessage]);
             await saveMessageToDatabase(currentChatId, 'user', message);
-
+    
             setUserInput("");
             setIsTyping(true);
             setAiStatus('thinking');
-
+    
             if (wsRef.current?.readyState === WebSocket.OPEN) {
                 wsRef.current.send(JSON.stringify({
                     type: 'message',
@@ -289,6 +270,30 @@ function ChatApp() {
             setError('Failed to send message');
             setIsTyping(false);
             setAiStatus('idle');
+        }
+    };
+
+    const loadMessages = async (chatId) => {
+        try {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/chat/messages?chat_id=${chatId}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                const formattedMessages = data.map(msg => ({
+                    message: msg.content,
+                    direction: msg.sender === 'user' ? 'outgoing' : 'incoming',
+                    sender: msg.sender,
+                    attachment: {
+                        type: msg.is_attachment ? renderType : "text",
+                        src: null
+                    }
+                }));
+                setMessages(formattedMessages);
+            } else {
+                console.error('Failed to load messages:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading messages:', error);
         }
     };
 
@@ -315,10 +320,10 @@ function ChatApp() {
                 handleSend(file.name, true,  reader.result);
             };
             reader.readAsDataURL(file);
+            toggleAttach();
         }
         toggleAttach();
     };
-
     const toggleAttach = () => setAttachFile(prev => !prev);
 
     const getAiImage = () => {
