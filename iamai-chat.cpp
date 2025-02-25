@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <filesystem>
+#include <fstream>
 #include "crow.h"
 #include "iamai-core/core/folder_manager.h"
 #include "iamai-core/core/model_manager.h"
@@ -18,6 +19,50 @@ bool hasExtension(const std::string &path, const std::string &ext)
     if (ext.length() > path.length())
         return false;
     return path.compare(path.length() - ext.length(), ext.length(), ext) == 0;
+}
+
+// Helper function to save binary data to a temporary WAV file
+std::string saveTempWavFile(const std::string& binary_data) {
+    auto& folder_manager = FolderManager::getInstance();
+    fs::path temp_path = folder_manager.getAppDataPath() / "temp";
+    
+    // Create temp directory if it doesn't exist
+    if (!fs::exists(temp_path)) {
+        fs::create_directories(temp_path);
+    }
+    
+    // Generate unique filename
+    std::string filename = "temp_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + ".wav";
+    fs::path file_path = temp_path / filename;
+    
+    // Save binary data
+    std::ofstream file(file_path.string(), std::ios::binary);
+    file.write(binary_data.data(), binary_data.size());
+    file.close();
+    
+    return file_path.string();
+}
+
+// Helper function to save binary data to a temporary WAV file
+std::string saveTempWavFile(const std::string& binary_data) {
+    auto& folder_manager = FolderManager::getInstance();
+    fs::path temp_path = folder_manager.getAppDataPath() / "temp";
+    
+    // Create temp directory if it doesn't exist
+    if (!fs::exists(temp_path)) {
+        fs::create_directories(temp_path);
+    }
+    
+    // Generate unique filename
+    std::string filename = "temp_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + ".wav";
+    fs::path file_path = temp_path / filename;
+    
+    // Save binary data
+    std::ofstream file(file_path.string(), std::ios::binary);
+    file.write(binary_data.data(), binary_data.size());
+    file.close();
+    
+    return file_path.string();
 }
 
 void add_cors_headers(crow::response &res)
@@ -174,33 +219,29 @@ int main()
     }
 
     std::cout << "Using GUI path: " << projectPath << std::endl;
-
-    auto &folder_manager = FolderManager::getInstance();
-    if (!folder_manager.createFolderStructure())
-    {
+    
+    // Initialize folder structure
+    auto& folder_manager = FolderManager::getInstance();
+    if (!folder_manager.createFolderStructure()) {
         throw std::runtime_error("Failed to create folder structure");
     }
-
+    
+    // Initialize Whisper interface
     std::unique_ptr<WhisperInterface> whisper;
-    try
-    {
+    try {
         fs::path whisper_model_path = folder_manager.getModelsPath() / "ggml-base.en.bin";
-        if (!fs::exists(whisper_model_path))
-        {
+        if (!fs::exists(whisper_model_path)) {
             std::cerr << "Warning: Whisper model not found at " << whisper_model_path << std::endl;
-        }
-        else
-        {
+        } else {
             whisper = std::make_unique<WhisperInterface>(whisper_model_path.string());
             whisper->setThreads(4);
             whisper->setLanguage("en");
         }
-    }
-    catch (const std::exception &e)
-    {
+    } catch (const std::exception& e) {
         std::cerr << "Failed to initialize Whisper: " << e.what() << std::endl;
     }
 
+    // Initialize Model Manager
     std::unique_ptr<ModelManager> model_manager;
     try
     {
