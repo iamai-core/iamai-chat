@@ -6,6 +6,7 @@
 #include "iamai-core/core/folder_manager.h"
 #include "iamai-core/core/model_manager.h"
 #include "iamai-core/core/sqlite3.h"
+#include "iamai-core/core/whisper_interface.h"
 #include <memory>
 #include <exception>
 
@@ -113,6 +114,29 @@ sqlite3 *initializeDatabase()
     return db;
 }
 
+std::string saveTempWavFile(const std::string &binary_data)
+{
+    auto &folder_manager = FolderManager::getInstance();
+    fs::path temp_path = folder_manager.getAppDataPath() / "temp";
+
+    // Create temp directory if it doesn't exist
+    if (!fs::exists(temp_path))
+    {
+        fs::create_directories(temp_path);
+    }
+
+    // Generate unique filename
+    std::string filename = "temp_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + ".wav";
+    fs::path file_path = temp_path / filename;
+
+    // Save binary data
+    std::ofstream file(file_path.string(), std::ios::binary);
+    file.write(binary_data.data(), binary_data.size());
+    file.close();
+
+    return file_path.string();
+}
+
 int main()
 {
     crow::SimpleApp app;
@@ -151,18 +175,30 @@ int main()
 
     std::cout << "Using GUI path: " << projectPath << std::endl;
 
+    auto &folder_manager = FolderManager::getInstance();
+    if (!folder_manager.createFolderStructure())
+    {
+        throw std::runtime_error("Failed to create folder structure");
+    }
+
+    std::unique_ptr<WhisperInterface> whisper;
     try
     {
-        auto &folder_manager = FolderManager::getInstance();
-        if (!folder_manager.createFolderStructure())
+        fs::path whisper_model_path = folder_manager.getModelsPath() / "ggml-base.en.bin";
+        if (!fs::exists(whisper_model_path))
         {
-            throw std::runtime_error("Failed to create folder structure");
+            std::cerr << "Warning: Whisper model not found at " << whisper_model_path << std::endl;
+        }
+        else
+        {
+            whisper = std::make_unique<WhisperInterface>(whisper_model_path.string());
+            whisper->setThreads(4);
+            whisper->setLanguage("en");
         }
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Failed to initialize folder structure: " << e.what() << std::endl;
-        return 1;
+        std::cerr << "Failed to initialize Whisper: " << e.what() << std::endl;
     }
 
     std::unique_ptr<ModelManager> model_manager;
@@ -364,8 +400,8 @@ int main()
             if (stmt) sqlite3_finalize(stmt);
             return res; });
 
-            CROW_ROUTE(app, "/chat/messages").methods(crow::HTTPMethod::Get)([db](const crow::request &req)
-            {
+    CROW_ROUTE(app, "/chat/messages").methods(crow::HTTPMethod::Get)([db](const crow::request &req)
+                                                                     {
                 crow::response res;
                 add_cors_headers(res);
                 sqlite3_stmt* stmt = nullptr;
@@ -405,8 +441,7 @@ int main()
                 }
             
                 if (stmt) sqlite3_finalize(stmt);
-                return res;
-            });
+                return res; });
 
     CROW_ROUTE(app, "/settings/save").methods(crow::HTTPMethod::Post)([db](const crow::request &req)
                                                                       {
@@ -540,52 +575,73 @@ int main()
     CROW_WEBSOCKET_ROUTE(app, "/ws")
         .onopen([](crow::websocket::connection &conn)
                 {
-            try {
-                crow::json::wvalue response;
-                response["type"] = "connection";
-                response["status"] = "connected";
-                conn.send_text(response.dump());
-            } catch (const std::exception& e) {
-                std::cerr << "Error in onopen: " << e.what() << std::endl;
-                crow::json::wvalue error_response;
-                error_response["type"] = "error";
-                error_response["message"] = e.what();
-                conn.send_text(error_response.dump());
-            } })
+                try {
+                    crow::json::wvalue response;
+                    response["type"] = "connection";
+                    response["status"] = "connected";
+                    conn.send_text(response.dump());
+                } catch (const std::exception& e) {
+                    std::cerr << "Error in onopen: " << e.what() << std::endl;
+                    crow::json::wvalue error_response;
+                    error_response["type"] = "error";
+                    error_response["message"] = e.what();
+                    conn.send_text(error_response.dump());
+                } })
         .onclose([](crow::websocket::connection &conn, const std::string &reason)
                  { std::cout << "WebSocket connection closed: " << reason << std::endl; })
-        .onmessage([&model_manager](crow::websocket::connection &conn, const std::string &data, bool is_binary)
+        .onmessage([&model_manager, &whisper](crow::websocket::connection &conn, const std::string &data, bool is_binary)
                    {
-            try {
-                if (!is_binary) {
-                    auto json_data = crow::json::load(data);
-                    if (!json_data) {
-                        throw std::runtime_error("Invalid JSON received");
+                try {
+                    std::string input_text;
+                    int chat_id = -1;
+        
+                    if (is_binary) {
+                        if (!whisper) {
+                            crow::json::wvalue error_response;
+                            error_response["type"] = "error";
+                            error_response["message"] = "Speech-to-text service not available";
+                            conn.send_text(error_response.dump());
+                            return;
+                        }
+        
+                        std::string temp_file = saveTempWavFile(data);
+                        try {
+                            input_text = whisper->transcribe(temp_file);
+                            fs::remove(temp_file);
+                        } catch (const std::exception& e) {
+                            fs::remove(temp_file);
+                            crow::json::wvalue error_response;
+                            error_response["type"] = "error";
+                            error_response["message"] = std::string("Error transcribing audio: ") + e.what();
+                            conn.send_text(error_response.dump());
+                            return;
+                        }
+                    } else {
+                        auto json_data = crow::json::load(data);
+                        if (!json_data) {
+                            throw std::runtime_error("Invalid JSON received");
+                        }
+                        input_text = json_data["content"].s();
+                        chat_id = json_data["chatId"].i();
                     }
-
-                    if (!model_manager->getCurrentModel()) {
-                        throw std::runtime_error("No model currently loaded");
+        
+                    if (!input_text.empty() && model_manager->getCurrentModel()) {
+                        std::string response = model_manager->getCurrentModel()->generate(input_text);
+                        
+                        crow::json::wvalue response_json;
+                        response_json["type"] = "response";
+                        response_json["content"] = response;
+                        response_json["chatId"] = chat_id;
+                        
+                        conn.send_text(response_json.dump());
                     }
-
-                    std::string message_content = json_data["content"].s();
-                    int chat_id = json_data["chatId"].i();
-
-                    std::string response = model_manager->getCurrentModel()->generate(message_content);
-                    
-                    crow::json::wvalue response_json;
-                    response_json["type"] = "response";
-                    response_json["content"] = response;
-                    response_json["chatId"] = chat_id;
-                    
-                    conn.send_text(response_json.dump());
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Error processing message: " << e.what() << std::endl;
-                crow::json::wvalue error_response;
-                error_response["type"] = "error";
-                error_response["message"] = e.what();
-                conn.send_text(error_response.dump());
-            } });
+                } catch (const std::exception& e) {
+                    std::cerr << "Error processing message: " << e.what() << std::endl;
+                    crow::json::wvalue error_response;
+                    error_response["type"] = "error";
+                    error_response["message"] = e.what();
+                    conn.send_text(error_response.dump());
+                } });
 
     CROW_ROUTE(app, "/")
     ([projectPath](const crow::request &req)
