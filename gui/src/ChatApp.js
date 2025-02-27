@@ -9,6 +9,8 @@ import {
     TypingIndicator,
 } from '@chatscope/chat-ui-kit-react';
 import { AppContext } from "./App";
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
 import ListGroup from 'react-bootstrap/ListGroup';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import menu_Img from "./assets/menu_btn.PNG";
@@ -31,6 +33,30 @@ const CONFIG = {
     WS_URL: process.env.REACT_APP_WS_URL || 'ws://localhost:8080/ws'
 };
 
+const ffmpeg = new FFmpeg();
+
+async function convertWebMToWAV(webmBlob) {
+    if (!ffmpeg.loaded) {
+        await ffmpeg.load();
+    }
+    const webmFileName = 'input.webm';
+    const wavFileName = 'output.wav';
+    const webmData = await fetchFile(webmBlob);
+
+    await ffmpeg.writeFile(webmFileName, webmData);
+    await ffmpeg.exec([
+        '-i', webmFileName,
+        '-acodec', 'pcm_s16le',
+        '-ar', '16000',
+        '-ac', '1',
+        wavFileName
+    ]);
+    
+    const data = await ffmpeg.readFile(wavFileName);
+
+    return new Blob([data.buffer], { type: 'audio/wav' });
+}
+
 var renderType = "text";
 
 function ChatApp() {
@@ -47,11 +73,22 @@ function ChatApp() {
     const [error, setError] = useState(null);
     const wsRef = useRef(null);
     const [isRecording, setIsRecording] = useState(false);
-    const [isTranscribing, setIsTranscribing] = useState(false);
     const mediaRecorderRef = useRef(null);
-    const audioChunksRef = useRef([]);
+    const audioChunks = useRef([]);
+
     const [wsReady, setWsReady] = useState(false);
     const wsResponseTimeout = useRef(null);
+
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadFFmpeg = async () => {
+            await ffmpeg.load();
+            setLoading(false);
+        };
+
+        loadFFmpeg();
+    }, []);
 
     useEffect(() => {
         loadChats();
@@ -108,41 +145,32 @@ function ChatApp() {
         try {
             if (typeof event.data === 'string') {
                 const response = JSON.parse(event.data);
-                console.log("WebSocket message received:", response);
-
                 switch (response.type) {
                     case 'connection':
                         console.log("WebSocket connection confirmed:", response.status);
                         break;
 
                     case 'transcription':
-                        // Clear the transcription timeout as soon as a transcription message is received
                         if (wsResponseTimeout.current) {
                             clearTimeout(wsResponseTimeout.current);
                             wsResponseTimeout.current = null;
                         }
-                        setIsTranscribing(false);
-
-                        // Remove any "Transcription:" prefix and treat all messages as final
                         const transcriptionText = response.content.startsWith("Transcription:")
                             ? response.content.replace("Transcription:", "").trim()
-                            : response.content;
+                            : response.content.trim();
 
                         console.log("Transcription received:", transcriptionText);
+                        setAiStatus('idle');
 
-                        // Process the transcription if it exists
-                        if (transcriptionText) {
+                        if (transcriptionText && transcriptionText !== "") {
                             const newMessage = {
                                 message: transcriptionText,
                                 direction: 'outgoing',
                                 sender: "user",
                                 attachment: { type: "text", src: null }
                             };
-
                             setMessages(prev => [...prev, newMessage]);
                             await saveMessageToDatabase(currentChatId, 'user', transcriptionText, false, "text");
-
-                            // Trigger the AI response using the transcribed text
                             setIsTyping(true);
                             setAiStatus('thinking');
                             if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -150,9 +178,16 @@ function ChatApp() {
                                     type: 'message',
                                     content: transcriptionText,
                                     chatId: currentChatId,
-                                    isAudio: false
+                                    isAudio: true
                                 }));
+                            } else {
+                                console.error("WebSocket not connected when trying to send transcription");
+                                setError("Connection lost. Please refresh and try again.");
+                                setAiStatus('idle');
                             }
+                        } else {
+                            console.log("Empty transcription received");
+                            setAiStatus('idle');
                         }
                         break;
 
@@ -176,18 +211,20 @@ function ChatApp() {
                         console.error("Server error:", response.message);
                         setError(response.message);
                         setIsTyping(false);
-                        setIsTranscribing(false);
+                        setAiStatus('idle');
                         break;
 
                     default:
                         console.warn("Unknown message type:", response.type);
                 }
-            } else {
+            } else if (event.data instanceof Blob) {
                 console.log("Binary data received, length:", event.data.size);
             }
         } catch (error) {
             console.error("Error processing WebSocket message:", error);
             setError("Error processing server response");
+            setIsTyping(false);
+            setAiStatus('idle');
         }
     };
 
@@ -214,105 +251,71 @@ function ChatApp() {
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const options = {
-                mimeType: 'audio/webm',
-                audioBitsPerSecond: 16000
-            };
+            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
-            mediaRecorderRef.current = new MediaRecorder(stream, options);
-            audioChunksRef.current = [];
+            audioChunks.current = [];
 
             mediaRecorderRef.current.ondataavailable = (event) => {
                 if (event.data.size > 0) {
-                    audioChunksRef.current.push(event.data);
+                    audioChunks.current.push(event.data);
+                }
+            };
+            mediaRecorderRef.current.onstop = async () => {
+                const audioBlob = new Blob(audioChunks.current, { type: "audio/webm" });
+                console.log("Recording completed, blob size:", audioBlob.size);
+
+                try {
+                    setAiStatus('listening');
+                    console.log("Converting WebM to WAV...");
+                    const wavBlob = await convertWebMToWAV(audioBlob);
+                    console.log("Conversion complete, WAV blob size:", wavBlob.size);
+
+                    await sendAudioToServer(wavBlob);
+
+                    wsResponseTimeout.current = setTimeout(() => {
+                        setError("Transcription timed out. Please try again.");
+                        setAiStatus('idle');
+                    }, 10000);
+                } catch (error) {
+                    console.error("Error processing audio:", error);
+                    setError("Failed to process audio recording");
+                    setAiStatus('idle');
                 }
             };
 
-            mediaRecorderRef.current.onstop = async () => {
-                console.log("Recording stopped, processing audio...");
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                await sendAudioToServer(audioBlob);
-            };
-
+            mediaRecorderRef.current.start();
             setIsRecording(true);
-            setAiStatus('listening');
             console.log("Recording started");
-            mediaRecorderRef.current.start(100);
-        } catch (err) {
-            console.error("Error starting recording:", err);
-            setError("Failed to start recording: " + err.message);
-            setIsRecording(false);
+        } catch (error) {
+            console.error("Error accessing microphone:", error);
+            setError("Could not access microphone");
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && isRecording) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             console.log("Stopping recording...");
             mediaRecorderRef.current.stop();
             setIsRecording(false);
-            setIsTranscribing(true);
-            setAiStatus('thinking');
-            if (mediaRecorderRef.current.stream) {
-                mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-            }
         }
     };
 
-    const fileToBase64 = (file) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-                resolve(reader.result);
-            };
-            reader.onerror = (error) => {
-                reject(error);
-            };
-            reader.readAsDataURL(file);
-        });
-    };
-
-    const sendAudioToServer = async (audioBlob) => {
-        if (!wsReady || !currentChatId) {
-            setError("WebSocket not connected or no chat selected");
-            setIsTranscribing(false);
+    const sendAudioToServer = async (wavBlob) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            setError("WebSocket is not connected");
+            setAiStatus('idle');
             return;
         }
 
         try {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                console.log("Sending audio to server, size:", audioBlob.size, "bytes");
-
-                // Wait for the FileReader to finish
-                const result = await fileToBase64(audioBlob);
-                const base64Audio = result.split(',')[1];
-
-                const message = JSON.stringify({
-                    type: 'message',
-                    content: '[AUDIO_TRANSCRIPTION_REQUEST]', // Placeholder text
-                    chatId: currentChatId,
-                    isAudio: true,
-                    audioData: base64Audio,
-                });
-
-                wsRef.current.send(message);
-
-                // Set a transcription timeout in case nothing comes back within 30s.
-                wsResponseTimeout.current = setTimeout(() => {
-                    setIsTranscribing(false);
-                    setError("Transcription timeout");
-                    setAiStatus('idle');
-                }, 30000);
-            } else {
-                throw new Error('WebSocket not connected');
-            }
-        } catch (err) {
-            console.error('Error sending audio:', err);
-            setError('Failed to send audio: ' + err.message);
-            setIsTranscribing(false);
+            console.log("Sending audio blob to server for transcription...");
+            wsRef.current.send(wavBlob);
+        } catch (error) {
+            console.error("Error sending audio:", error);
+            setError("Failed to send audio for transcription");
             setAiStatus('idle');
         }
     };
-    
     const addNewChat = async () => {
         const chatName = prompt("Enter a name for your new chat:");
         if (!chatName) {
@@ -477,24 +480,12 @@ function ChatApp() {
                     <img className="logo" src={logo} alt="Logo" />
                 </div>
             </header>
-            {error && (
-                <div className="error-banner" style={{
-                    backgroundColor: '#ffdddd',
-                    color: '#ff0000',
-                    padding: '10px',
-                    textAlign: 'center'
-                }}>
-                    {error}
-                    <button onClick={() => setError(null)} style={{ marginLeft: '10px' }}>×</button>
-                </div>
-            )}
             <MainContainer className="chat-main" style={{ fontSize: `${messageFontSize}px` }}>
                 <ChatContainer className="chat-container" style={{ fontSize: `${messageFontSize}px` }}>
                     <MessageList
                         scrollBehavior="smooth"
                         typingIndicator={isTyping ?
-                            <TypingIndicator content="Aimi is thinking..." style={{ fontSize: `${messageFontSize}px` }} /> :
-                            isTranscribing ? <TypingIndicator content="Transcribing audio..." style={{ fontSize: `${messageFontSize}px` }} /> : null
+                            <TypingIndicator content="Aimi is thinking..." style={{ fontSize: `${messageFontSize}px` }} /> : null
                         }
                         style={{ fontSize: `${messageFontSize}px` }}
                     >
@@ -534,22 +525,29 @@ function ChatApp() {
                                 setAiStatus(text ? 'listening' : 'idle');
                             }}
                             onSend={handleSend}
-                            disabled={isTyping || !isConnected || isRecording || isTranscribing}
+                            disabled={isTyping || !isConnected || isRecording}
                             style={{ fontSize: `${messageFontSize}px` }}
                             onAttachClick={() => setAttachFile(prev => !prev)}
                         />
-                        <button
-                            className={`microphone-button ${isRecording ? 'recording' : ''} ${isTranscribing ? 'transcribing' : ''}`}
-                            onClick={isRecording ? stopRecording : startRecording}
-                            type="button"
-                            disabled={!isConnected || isTranscribing}
-                            style={{
-                                backgroundColor: isRecording ? '#ff4c4c' : '#4c84ff',
-                                animation: isRecording ? 'pulse 1.5s infinite' : 'none'
-                            }}
-                        >
-                            <img src={isRecording ? mic2_Icon : mic_Icon} alt="Microphone" style={{ width: '24px', height: '24px' }} />
-                        </button>
+                        <div>
+                            <button
+                                className={`microphone-button ${isRecording ? 'recording' : ''}`}
+                                onClick={isRecording ? stopRecording : startRecording}
+                                type="button"
+                                disabled={!isConnected}
+                                style={{
+                                    backgroundColor: isRecording ? '#ff4c4c' : '#4c84ff',
+                                    animation: isRecording ? 'pulse 1.5s infinite' : 'none'
+                                }}
+                            >
+                                <img
+                                    src={isRecording ? mic2_Icon : mic_Icon}
+                                    alt="Microphone"
+                                    style={{ width: '24px', height: '24px', marginRight: '8px' }}
+                                />
+                                {isRecording ? 'Stop Recording' : 'Start Recording'}
+                            </button>
+                        </div>
                     </div>
                 </ChatContainer>
             </MainContainer>
