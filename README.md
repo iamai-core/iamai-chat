@@ -14,7 +14,7 @@ This project focuses on providing an engaging and interactive front-end experien
 - Create and manage new chats for different purposes.
 - Enjoy modern design elements, including fun facial expressions displayed on the front page for the AI model.
 
-  Requirements
+Requirements
 ------------
 1. Git (to clone the repository and submodules)
 2. CMake >= 3.15
