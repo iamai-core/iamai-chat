@@ -14,10 +14,19 @@ This project focuses on providing an engaging and interactive front-end experien
 - Create and manage new chats for different purposes.
 - Enjoy modern design elements, including fun facial expressions displayed on the front page for the AI model.
 
+  Requirements
+------------
+1. Git (to clone the repository and submodules)
+2. CMake >= 3.15
+3. C++ Compiler supporting C++17
+4. CUDA (Version 12 recommended) if you want GPU acceleration
+   - You should have the environment variable CUDA_PATH set to your CUDA installation on Windows.
+   - On Windows, the build scripts will attempt to copy CUDA DLLs (cudart64_12.dll, cublas64_12.dll, cublasLt64_12.dll) to the output directory automatically.
+
+
 ## Setup and Build the GUI project
 We would reccomend Visual Studio Code for this project. Follow the steps below to set up and run the GUI:
 - Open a terminal
 - Run the following command to build the project: "npm run build"
-- Install the serve package globally: "npm install -g serve"
-- Start the server with the following command: "serve -s build"
-- Open your browser and navigate to localhost:3000 to view the application.
+- Open your CMake Tab, and Launch the CMake.
+- Open Localhost:8080 in your web browser of choice
