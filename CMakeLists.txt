@@ -46,21 +46,32 @@ target_include_directories(Crow INTERFACE ${CMAKE_SOURCE_DIR}/include)
 find_library(SHELL32_LIBRARY Shell32)
 find_library(OLE32_LIBRARY Ole32)
 
-# Set SQLite3 include and lib directories correctly
-set(SQLite3_INCLUDE_DIR "./iamai-core/core")
-set(SQLite3_LIB_DIR "./iamai-core/core")
-
-# Add SQLite3 include and lib directories
-include_directories(${SQLite3_INCLUDE_DIR})
-link_directories(${SQLite3_LIB_DIR})
-
-# Ensure SQLite3 library is found and link to the target
-find_library(SQLITE3_LIBRARY sqlite3.lib ${SQLite3_LIB_DIR})
-if(SQLITE3_LIBRARY)
-    message(STATUS "SQLite3 library found at ${SQLITE3_LIBRARY}")
-else()
-    message(FATAL_ERROR "SQLite3 library not found.")
+# Build SQLite3 from source
+set(SQLITE3_SRC_FILE "${CMAKE_SOURCE_DIR}/iamai-core/core/sqlite3.c")
+# Check if the SQLite3 source file exists
+if(NOT EXISTS ${SQLITE3_SRC_FILE})
+    message(FATAL_ERROR "SQLite3 source file not found at ${SQLITE3_SRC_FILE}. Please ensure it exists.")
 endif()
+
+# Build SQLite3 as a shared library
+add_library(sqlite3 SHARED ${SQLITE3_SRC_FILE})
+target_compile_definitions(sqlite3 PRIVATE
+    SQLITE_ENABLE_RTREE
+    SQLITE_ENABLE_FTS4
+    SQLITE_ENABLE_FTS5
+    SQLITE_ENABLE_JSON1
+    SQLITE_THREADSAFE=1
+)
+if(WIN32)
+    # Add definition for exports on Windows
+    target_compile_definitions(sqlite3 PRIVATE SQLITE_API=__declspec\(dllexport\))
+endif()
+
+# On Windows, make sure the DLL gets placed in the same directory as the executable
+set_target_properties(sqlite3 PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>
+)
 
 # Create the executable
 add_executable(iamai-chat
@@ -76,6 +87,7 @@ target_include_directories(iamai-chat
     ${CMAKE_SOURCE_DIR}/include  # For Crow headers
     ${CMAKE_SOURCE_DIR}/iamai-core  # For iamai-core headers
     ${CMAKE_SOURCE_DIR}/iamai-core/whisper.cpp  # For whisper headers
+    ${CMAKE_SOURCE_DIR}/iamai-core/core  # For sqlite3.h
 )
 
 # Link all libraries
@@ -87,8 +99,11 @@ target_link_libraries(iamai-chat
     ${SHELL32_LIBRARY}
     ${OLE32_LIBRARY}
     Threads::Threads
-    ${SQLITE3_LIBRARY}  # Link SQLite3 library directly here
+    sqlite3
 )
+
+# Add dependency to ensure sqlite3 is built before iamai-chat
+add_dependencies(iamai-chat sqlite3)
 
 # Find and link threads
 find_package(Threads REQUIRED)

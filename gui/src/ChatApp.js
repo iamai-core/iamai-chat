@@ -545,7 +545,6 @@ function ChatApp() {
                                     alt="Microphone"
                                     style={{ width: '24px', height: '24px', marginRight: '8px' }}
                                 />
-                                {isRecording ? 'Stop Recording' : 'Start Recording'}
                             </button>
                         </div>
                     </div>
