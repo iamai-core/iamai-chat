@@ -12,6 +12,9 @@ import { AppContext } from "./App";
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import ListGroup from 'react-bootstrap/ListGroup';
+import Modal from 'react-bootstrap/Modal';
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import menu_Img from "./assets/menu_btn.PNG";
 import logo from "./assets/iamai_logo.png";
@@ -80,6 +83,10 @@ function ChatApp() {
     const wsResponseTimeout = useRef(null);
 
     const [loading, setLoading] = useState(true);
+    
+    const [showCreateChatModal, setShowCreateChatModal] = useState(false);
+    const [newChatName, setNewChatName] = useState("");
+    const [initialLoadCompleted, setInitialLoadCompleted] = useState(false);
 
     useEffect(() => {
         const loadFFmpeg = async () => {
@@ -93,6 +100,12 @@ function ChatApp() {
     useEffect(() => {
         loadChats();
     }, []);
+    
+    useEffect(() => {
+        if (chats.length === 0 && initialLoadCompleted) {
+            setShowCreateChatModal(true);
+        }
+    }, [chats, initialLoadCompleted]);
 
     useEffect(() => {
         if (currentChatId) {
@@ -238,13 +251,16 @@ function ChatApp() {
                 if (data.length > 0 && !currentChatId) {
                     setCurrentChatId(data[0].id);
                 }
+                setInitialLoadCompleted(true);
             } else {
                 setError('Failed to load chats');
                 console.error('Failed to load chats:', data.error);
+                setInitialLoadCompleted(true);
             }
         } catch (error) {
             setError('Failed to load chats');
             console.error('Error loading chats:', error);
+            setInitialLoadCompleted(true);
         }
     };
 
@@ -317,31 +333,45 @@ function ChatApp() {
         }
     };
     const addNewChat = async () => {
-        const chatName = prompt("Enter a name for your new chat:");
-        if (!chatName) {
-            alert("Chat creation canceled. Chat name required.");
-            return;
-        }
-        try {
-            const response = await fetch(`${CONFIG.API_BASE_URL}/chat`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name: chatName })
-            });
-            const data = await response.json();
-            if (response.ok) {
-                setChats(prev => [...prev, data]);
-                setCurrentChatId(data.id);
-                setMessages([]);
-            } else {
-                setError('Failed to create chat');
-                console.error('Failed to create chat:', data.error);
+        setIsMenuOpen(false);
+        if (showCreateChatModal) {
+            if (!newChatName) {
+                setError("Chat name is required");
+                return;
             }
-        } catch (error) {
-            setError('Failed to create chat');
-            console.error('Error creating chat:', error);
+            
+            try {
+                const response = await fetch(`${CONFIG.API_BASE_URL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name: newChatName })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    setChats(prev => [...prev, data]);
+                    setCurrentChatId(data.id);
+                    setMessages([]);
+                    setShowCreateChatModal(false);
+                    setNewChatName("");
+                } else {
+                    setError('Failed to create chat');
+                    console.error('Failed to create chat:', data.error);
+                }
+            } catch (error) {
+                setError('Failed to create chat');
+                console.error('Error creating chat:', error);
+            }
+        } else {
+            setShowCreateChatModal(true);
+        }
+    };
+    
+    const handleCloseModal = () => {
+        if (chats.length > 0) {
+            setShowCreateChatModal(false);
+            setNewChatName("");
         }
     };
 
@@ -467,6 +497,11 @@ function ChatApp() {
             case 'speaking': return speaking;
             default: return idle;
         }
+    };
+
+    const handleCreateChatSubmit = (e) => {
+        e.preventDefault();
+        addNewChat();
     };
 
     return (
@@ -614,6 +649,47 @@ function ChatApp() {
                     </ListGroup>
                 </div>
             )}
+
+            {/* Create Chat Modal */}
+            <Modal 
+                show={showCreateChatModal} 
+                onHide={handleCloseModal}
+                backdrop={chats.length === 0 ? 'static' : true}
+                keyboard={chats.length > 0}
+                centered
+            >
+                <Modal.Header closeButton={chats.length > 0}>
+                    <Modal.Title>Create New Chat</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {chats.length === 0 ? (
+                        <p>Welcome! Please create your first chat to get started.</p>
+                    ) : (
+                        <p>Enter a name for your new chat:</p>
+                    )}
+                    <Form onSubmit={handleCreateChatSubmit}>
+                        <Form.Group className="mb-3">
+                            <Form.Control
+                                type="text"
+                                placeholder="Chat name"
+                                value={newChatName}
+                                onChange={(e) => setNewChatName(e.target.value)}
+                                autoFocus
+                                required
+                            />
+                        </Form.Group>
+                    </Form>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button 
+                        variant="primary" 
+                        onClick={addNewChat}
+                        disabled={!newChatName}
+                    >
+                        Create Chat
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 }
