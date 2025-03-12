@@ -158,7 +158,8 @@ int main()
     }
 
     fs::path execPath = fs::current_path();
-    fs::path projectPath = execPath.parent_path().parent_path().parent_path() / "gui" / "build";
+    // fs::path projectPath = execPath.parent_path().parent_path().parent_path() / "gui" / "build";
+    fs::path projectPath = execPath / "gui" / "build";
 
     std::cout << "Current path: " << execPath << std::endl;
     std::cout << "Project path: " << projectPath << std::endl;
@@ -189,7 +190,8 @@ int main()
     std::unique_ptr<WhisperInterface> whisper;
     try
     {
-        fs::path whisper_model_path = folder_manager.getModelsPath() / "ggml-base.en.bin";
+        // Use executable path instead of folder manager
+        fs::path whisper_model_path = execPath / "ggml-base.en.bin";
         if (!fs::exists(whisper_model_path))
         {
             std::cerr << "Warning: Whisper model not found at " << whisper_model_path << std::endl;
@@ -207,64 +209,58 @@ int main()
     }
 
     // Initialize Model Manager
-    std::unique_ptr<ModelManager> model_manager;
+    //std::unique_ptr<ModelManager> model_manager;
+    std::unique_ptr<Interface> llm_model;
+
     try
     {
-        model_manager = std::make_unique<ModelManager>();
-        auto models = model_manager->listModels();
-        if (models.empty())
+        // Hardcode the model path to the executable directory
+        fs::path model_path = execPath / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf";
+        
+        if (!fs::exists(model_path))
         {
-            std::cout << "No models found in models directory" << std::endl;
+            std::cerr << "Error: Model not found at " << model_path << std::endl;
+            throw std::runtime_error("Model file not found");
         }
-        else
-        {
-            if (!model_manager->switchModel(models[0]))
-            {
-                throw std::runtime_error("Failed to load default model");
-            }
-        }
+        
+        // Create the Interface directly without using ModelManager
+        llm_model = std::make_unique<Interface>(model_path.string());
+        
+        // Configure the model parameters (same as in ModelManager::switchModel)
+        llm_model->setMaxTokens(512);
+        llm_model->setThreads(4);
+        llm_model->setBatchSize(512);
+        
+        std::cout << "Model loaded successfully: " << model_path.string() << std::endl;
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Failed to initialize Model Manager: " << e.what() << std::endl;
+        std::cerr << "Failed to initialize model: " << e.what() << std::endl;
         return 1;
     }
 
     // API endpoints
-    CROW_ROUTE(app, "/api/models").methods(crow::HTTPMethod::Get)([&model_manager]()
-                                                                  {
+    CROW_ROUTE(app, "/api/models").methods(crow::HTTPMethod::Get)([]()
+    {
         crow::response res;
         crow::json::wvalue response_body;
-        response_body["models"] = model_manager->listModels();
+        // Return just the hardcoded model
+        response_body["models"] = std::vector<std::string>{"tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"};
         res.write(response_body.dump());
         res.code = 200;
         res.set_header("Content-Type", "application/json");
-        return res; });
+        return res;
+    });
 
-    CROW_ROUTE(app, "/api/models/switch").methods(crow::HTTPMethod::Post)([&model_manager](const crow::request &req)
-                                                                          {
-            crow::response res;
-            res.set_header("Content-Type", "application/json");
-            try {
-                auto x = crow::json::load(req.body);
-                if (!x) {
-                    res.code = 400;
-                    res.write("{\"error\": \"Invalid JSON\"}");
-                    return res;
-                }
-                std::string model_name = x["model"].s();
-                if (model_manager->switchModel(model_name)) {
-                    res.code = 200;
-                    res.write("{\"message\": \"Model switched successfully\"}");
-                } else {
-                    res.code = 400;
-                    res.write("{\"error\": \"Failed to switch model\"}");
-                }
-            } catch (const std::exception& e) {
-                res.code = 500;
-                res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
-            }
-            return res; });
+    CROW_ROUTE(app, "/api/models/switch").methods(crow::HTTPMethod::Post)([](const crow::request &req)
+    {
+        crow::response res;
+        res.set_header("Content-Type", "application/json");
+        // Always return success since we only have one model
+        res.code = 200;
+        res.write("{\"message\": \"Using default model\"}");
+        return res;
+    });
 
     CROW_ROUTE(app, "/chat").methods(crow::HTTPMethod::Post)([db](const crow::request &req)
                                                              {
@@ -579,96 +575,99 @@ int main()
             }
             return res; });
 
-    CROW_WEBSOCKET_ROUTE(app, "/ws")
-        .onopen([](crow::websocket::connection &conn)
-                {
-                try {
-                    crow::json::wvalue response;
-                    response["type"] = "connection";
-                    response["status"] = "connected";
-                    conn.send_text(response.dump());
-                } catch (const std::exception& e) {
-                    std::cerr << "Error in onopen: " << e.what() << std::endl;
+            CROW_WEBSOCKET_ROUTE(app, "/ws")
+            .onopen([](crow::websocket::connection &conn)
+                    {
+                    try {
+                        crow::json::wvalue response;
+                        response["type"] = "connection";
+                        response["status"] = "connected";
+                        conn.send_text(response.dump());
+                    } catch (const std::exception& e) {
+                        std::cerr << "Error in onopen: " << e.what() << std::endl;
+                        crow::json::wvalue error_response;
+                        error_response["type"] = "error";
+                        error_response["message"] = e.what();
+                        conn.send_text(error_response.dump());
+                    } })
+            .onclose([](crow::websocket::connection &conn, const std::string &reason)
+                     { std::cout << "WebSocket connection closed: " << reason << std::endl; })
+            .onmessage([&llm_model, &whisper](crow::websocket::connection &conn, const std::string &data, bool is_binary)
+                       {
+        try {
+            std::string input_text;
+            int chat_id = -1;
+        
+            if (is_binary) {
+                std::cout << "Received binary audio data, size: " << data.size() << " bytes" << std::endl;
+                
+                if (!whisper) {
+                    std::cerr << "Error: Whisper interface not initialized" << std::endl;
                     crow::json::wvalue error_response;
                     error_response["type"] = "error";
-                    error_response["message"] = e.what();
+                    error_response["message"] = "Speech-to-text service not available";
                     conn.send_text(error_response.dump());
-                } })
-        .onclose([](crow::websocket::connection &conn, const std::string &reason)
-                 { std::cout << "WebSocket connection closed: " << reason << std::endl; })
-        .onmessage([&model_manager, &whisper](crow::websocket::connection &conn, const std::string &data, bool is_binary)
-                   {
-    try {
-        std::string input_text;
-        int chat_id = -1;
-
-        if (is_binary) {
-            std::cout << "Received binary audio data, size: " << data.size() << " bytes" << std::endl;
-            
-            if (!whisper) {
-                std::cerr << "Error: Whisper interface not initialized" << std::endl;
-                crow::json::wvalue error_response;
-                error_response["type"] = "error";
-                error_response["message"] = "Speech-to-text service not available";
-                conn.send_text(error_response.dump());
-                return;
-            }
-            std::string temp_file = saveTempWavFile(data);
-            std::cout << "Saved temporary WAV file: " << temp_file << std::endl;
-            
-            try {
-                std::cout << "Starting transcription..." << std::endl;
-                input_text = whisper->transcribe(temp_file);
-                std::cout << "Transcription complete: " << input_text << std::endl;
-                fs::remove(temp_file);
-                std::cout << "Removed temporary file" << std::endl;
-                crow::json::wvalue transcription_response;
-                transcription_response["type"] = "transcription";
-                transcription_response["content"] = input_text;
-                conn.send_text(transcription_response.dump());
-                if (input_text.empty()) {
-                    std::cout << "Transcription was empty, no further processing needed" << std::endl;
                     return;
                 }
-            } catch (const std::exception& e) {
-                fs::remove(temp_file);
-                std::cerr << "Error during transcription: " << e.what() << std::endl;
+                std::string temp_file = saveTempWavFile(data);
+                std::cout << "Saved temporary WAV file: " << temp_file << std::endl;
                 
-                crow::json::wvalue error_response;
-                error_response["type"] = "error";
-                error_response["message"] = std::string("Error transcribing audio: ") + e.what();
-                conn.send_text(error_response.dump());
-                return;
+                try {
+                    std::cout << "Starting transcription..." << std::endl;
+                    input_text = whisper->transcribe(temp_file);
+                    std::cout << "Transcription complete: " << input_text << std::endl;
+                    fs::remove(temp_file);
+                    std::cout << "Removed temporary file" << std::endl;
+                    crow::json::wvalue transcription_response;
+                    transcription_response["type"] = "transcription";
+                    transcription_response["content"] = input_text;
+                    conn.send_text(transcription_response.dump());
+                    if (input_text.empty()) {
+                        std::cout << "Transcription was empty, no further processing needed" << std::endl;
+                        return;
+                    }
+                } catch (const std::exception& e) {
+                    fs::remove(temp_file);
+                    std::cerr << "Error during transcription: " << e.what() << std::endl;
+                    
+                    crow::json::wvalue error_response;
+                    error_response["type"] = "error";
+                    error_response["message"] = std::string("Error transcribing audio: ") + e.what();
+                    conn.send_text(error_response.dump());
+                    return;
+                }
+            } else {
+                auto json_data = crow::json::load(data);
+                if (!json_data) {
+                    throw std::runtime_error("Invalid JSON received");
+                }
+                input_text = json_data["content"].s();
+                chat_id = json_data["chatId"].i();
+                if (json_data.has("isAudio") && json_data["isAudio"].b() == true) {
+                    std::cout << "Received confirmation for audio transcription with chat_id: " << chat_id << std::endl;
+                }
             }
-        } else {
-            auto json_data = crow::json::load(data);
-            if (!json_data) {
-                throw std::runtime_error("Invalid JSON received");
-            }
-            input_text = json_data["content"].s();
-            chat_id = json_data["chatId"].i();
-            if (json_data.has("isAudio") && json_data["isAudio"].b() == true) {
-                std::cout << "Received confirmation for audio transcription with chat_id: " << chat_id << std::endl;
-            }
-        }
-        if (!input_text.empty() && model_manager->getCurrentModel() && chat_id != -1) {
-            std::cout << "Generating response for input: " << input_text << std::endl;
-            std::string response = model_manager->getCurrentModel()->generate(input_text);
             
-            crow::json::wvalue response_json;
-            response_json["type"] = "response";
-            response_json["content"] = response;
-            response_json["chatId"] = chat_id;
-            
-            conn.send_text(response_json.dump());
+            // Use the Interface directly instead of through model_manager
+            if (!input_text.empty() && llm_model && chat_id != -1) {
+                std::cout << "Generating response for input: " << input_text << std::endl;
+                std::string response = llm_model->generate(input_text);
+                
+                crow::json::wvalue response_json;
+                response_json["type"] = "response";
+                response_json["content"] = response;
+                response_json["chatId"] = chat_id;
+                
+                conn.send_text(response_json.dump());
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error processing message: " << e.what() << std::endl;
+            crow::json::wvalue error_response;
+            error_response["type"] = "error";
+            error_response["message"] = e.what();
+            conn.send_text(error_response.dump());
         }
-    } catch (const std::exception& e) {
-        std::cerr << "Error processing message: " << e.what() << std::endl;
-        crow::json::wvalue error_response;
-        error_response["type"] = "error";
-        error_response["message"] = e.what();
-        conn.send_text(error_response.dump());
-    } });
+        });
 
     CROW_ROUTE(app, "/")
     ([projectPath](const crow::request &req)
