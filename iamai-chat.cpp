@@ -8,6 +8,8 @@
 #include "iamai-core/core/sqlite3.h"
 #include <memory>
 #include <exception>
+#include <string>
+#include <unordered_map>
 
 using namespace iamai;
 namespace fs = std::filesystem;
@@ -17,6 +19,59 @@ bool hasExtension(const std::string &path, const std::string &ext)
     if (ext.length() > path.length())
         return false;
     return path.compare(path.length() - ext.length(), ext.length(), ext) == 0;
+}
+
+std::unordered_map<std::string, std::string> mime_types = {
+    {".html", "text/html"},
+    {".js", "application/javascript"},
+    {".css", "text/css"},
+    {".json", "application/json"},
+    {".png", "image/png"},
+    {".jpg", "image/jpeg"},
+    {".jpeg", "image/jpeg"},
+    {".ico", "image/x-icon"},
+    {".glb", "model/gltf-binary"},
+    {".gltf", "model/gltf+json"},
+    {".bin", "application/octet-stream"},
+    {".wav", "audio/wav"},
+    {".mp3", "audio/mpeg"}};
+
+std::string get_extension(const std::string &path)
+{
+    size_t pos = path.find_last_of('.');
+    return (pos == std::string::npos) ? "" : path.substr(pos);
+}
+
+std::string get_mime_type(const std::string &path)
+{
+    std::string ext = get_extension(path);
+    auto it = mime_types.find(ext);
+    return (it == mime_types.end()) ? "application/octet-stream" : it->second;
+}
+
+// Helper function to save binary data to a temporary WAV file
+std::string saveTempWavFile(const std::string &binary_data)
+{
+    auto &folder_manager = FolderManager::getInstance();
+    fs::path temp_path = folder_manager.getAppDataPath() / "temp";
+
+    // Create temp directory if it doesn't exist
+    if (!fs::exists(temp_path))
+    {
+        fs::create_directories(temp_path);
+    }
+
+    // Generate unique filename
+    std::string filename = "temp_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + ".wav";
+    fs::path file_path = temp_path / filename;
+
+    // Save binary data
+    std::ofstream file(file_path.string(), std::ios::binary);
+    file.write(binary_data.data(), binary_data.size());
+    std::cout << "Saving temporary WAV file, data size: " << binary_data.size() << " bytes" << std::endl;
+    file.close();
+
+    return file_path.string();
 }
 
 void add_cors_headers(crow::response &res)
@@ -613,34 +668,107 @@ int main()
     ([projectPath](const crow::request &req, std::string path)
      {
         fs::path filepath = projectPath / path;
-        crow::response res;
-        
-        if (hasExtension(path, ".html")) res.set_header("Content-Type", "text/html");
-        else if (hasExtension(path, ".js")) res.set_header("Content-Type", "application/javascript");
-        else if (hasExtension(path, ".css")) res.set_header("Content-Type", "text/css");
-        else if (hasExtension(path, ".json")) res.set_header("Content-Type", "application/json");
-        else if (hasExtension(path, ".png")) res.set_header("Content-Type", "image/png");
-        else if (hasExtension(path, ".jpg") || hasExtension(path, ".jpeg")) res.set_header("Content-Type", "image/jpeg");
-        else if (hasExtension(path, ".ico")) res.set_header("Content-Type", "image/x-icon");
-        else res.set_header("Content-Type", "text/plain");
-
-        std::ifstream file(filepath.string(), std::ios::binary);
-        if (!file) {
-            fs::path indexPath = projectPath / "index.html";
-            file.open(indexPath.string(), std::ios::binary);
-            if (!file) {
-                res.code = 404;
-                res.write("Not found");
-                return res;
+        if (path.find("models/") == 0 && !fs::exists(filepath)) {
+            fs::path alt_path = fs::current_path() / path;
+            if (fs::exists(alt_path)) {
+                filepath = alt_path;
+                std::cout << "Using alternative model path: " << filepath << std::endl;
             }
-            res.set_header("Content-Type", "text/html");
         }
-        
-        res.write(std::string(
-            std::istreambuf_iterator<char>(file),
-            std::istreambuf_iterator<char>()
-        ));
-        return res; });
+            
+            crow::response res;
+            res.set_header("Content-Type", get_mime_type(path));
+            
+            std::ifstream file(filepath.string(), std::ios::binary);
+            if (!file) {
+                std::cout << "File not found: " << filepath << std::endl;
+                if (path.find("models/") == 0 || path.find(".glb") != std::string::npos) {
+                    res.code = 404;
+                    res.write("Model not found");
+                    return res;
+                }
+                fs::path indexPath = projectPath / "index.html";
+                file.open(indexPath.string(), std::ios::binary);
+                if (!file) {
+                    res.code = 404;
+                    res.write("Not found");
+                    return res;
+                }
+                res.set_header("Content-Type", "text/html");
+            }
+            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            res.write(content);
+            
+            return res; });
+
+    CROW_ROUTE(app, "/models/<path>")
+    ([](const crow::request &req, std::string path)
+     {
+                    fs::path models_dir = fs::current_path() / "models";
+                    fs::path filepath = models_dir / path;
+                    
+                    std::cout << "Model request for: " << path << std::endl;
+                    std::cout << "Looking in: " << filepath << std::endl;
+                    
+                    crow::response res;
+                    if (!fs::exists(filepath)) {
+                        std::cout << "Model file not found: " << filepath << std::endl;
+                        
+                        fs::path alt_models_dir = FolderManager::getInstance().getModelsPath();
+                        fs::path alt_filepath = alt_models_dir / path;
+                        std::cout << "Checking alternative path: " << alt_filepath << std::endl;
+                        
+                        if (fs::exists(alt_filepath)) {
+                            filepath = alt_filepath;
+                            std::cout << "Found model at alternative path: " << filepath << std::endl;
+                        } else {
+                            res.code = 404;
+                            res.write("Model not found. Checked paths:\n");
+                            res.write(filepath.string() + "\n");
+                            res.write(alt_filepath.string());
+                            
+                            res.write("\n\nAvailable models in primary directory:\n");
+                            if (fs::exists(models_dir) && fs::is_directory(models_dir)) {
+                                for (const auto& entry : fs::directory_iterator(models_dir)) {
+                                    if (entry.path().extension() == ".glb" || entry.path().extension() == ".gltf") {
+                                        res.write(entry.path().filename().string() + "\n");
+                                    }
+                                }
+                            } else {
+                                res.write("Primary models directory does not exist.\n");
+                            }
+                            
+                            res.write("\nAvailable models in alternative directory:\n");
+                            if (fs::exists(alt_models_dir) && fs::is_directory(alt_models_dir)) {
+                                for (const auto& entry : fs::directory_iterator(alt_models_dir)) {
+                                    if (entry.path().extension() == ".glb" || entry.path().extension() == ".gltf") {
+                                        res.write(entry.path().filename().string() + "\n");
+                                    }
+                                }
+                            } else {
+                                res.write("Alternative models directory does not exist.\n");
+                            }
+                            
+                            add_cors_headers(res);
+                            return res;
+                        }
+                    }
+                    
+                    res.set_header("Content-Type", "model/gltf-binary");
+                    
+                    std::ifstream file(filepath.string(), std::ios::binary);
+                    if (!file) {
+                        res.code = 500;
+                        res.write("Failed to read model file: " + filepath.string());
+                        add_cors_headers(res);
+                        return res;
+                    }
+                    
+                    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+                    res.write(content);
+                    
+                    add_cors_headers(res);
+                    return res; });
 
     std::cout << "Starting server on port 8080..." << std::endl;
     app.port(8080).run();

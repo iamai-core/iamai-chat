@@ -7,6 +7,10 @@
     "@chatscope/chat-ui-kit-react": "^2.0.3",
     "@chatscope/chat-ui-kit-styles": "^1.4.0",
     "@chatscope/use-chat": "^3.1.2",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "@react-three/drei": "^10.0.4",
+    "@react-three/fiber": "^9.1.0",
     "@uiw/react-color-wheel": "^2.3.4",
     "axios": "^1.7.9",
     "better-sqlite3": "^11.8.1",
@@ -15,13 +19,14 @@
     "cra-template": "1.2.0",
     "express": "^4.21.2",
     "js-cookie": "^3.0.5",
-    "react": "^18.2.0",
+    "react": "^19.0.0",
     "react-bootstrap": "^2.10.7",
-    "react-dom": "^18.2.0",
+    "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.1",
-    "react-scripts": "5.0.1",
+    "react-scripts": "^5.0.1",
     "react-slider": "^2.0.6",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "three": "^0.174.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -48,6 +53,9 @@
     ]
   },
   "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
     "concurrently": "^9.1.2",
     "react-app-rewired": "^2.2.1"
   }
