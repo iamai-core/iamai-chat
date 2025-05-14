@@ -215,22 +215,22 @@ int main()
     try
     {
         // Hardcode the model path to the executable directory
-        fs::path model_path = execPath / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf";
-        
+        fs::path model_path = execPath / "Llama-3.2-1B-Instruct-Q4_K_M.gguf";
+
         if (!fs::exists(model_path))
         {
             std::cerr << "Error: Model not found at " << model_path << std::endl;
             throw std::runtime_error("Model file not found");
         }
-        
+
         // Create the Interface directly without using ModelManager
         llm_model = std::make_unique<Interface>(model_path.string());
-        
+
         // Configure the model parameters (same as in ModelManager::switchModel)
         llm_model->setMaxTokens(512);
         llm_model->setThreads(4);
         llm_model->setBatchSize(512);
-        
+
         std::cout << "Model loaded successfully: " << model_path.string() << std::endl;
     }
     catch (const std::exception &e)
@@ -335,7 +335,7 @@ int main()
             crow::response res;
             add_cors_headers(res);
             sqlite3_stmt* stmt = nullptr;
-        
+
             try {
                 auto x = crow::json::load(req.body);
                 if (!x) {
@@ -343,7 +343,7 @@ int main()
                     res.write("{\"error\": \"Invalid JSON\"}");
                     return res;
                 }
-        
+
                 if (!x.has("chat_id") || !x.has("sender") || !x.has("content") || !x.has("is_attachment") || !x.has("file_type")) {
                     res.code = 400;
                     res.write("{\"error\": \"Missing required fields\"}");
@@ -367,7 +367,7 @@ int main()
                     throw std::runtime_error(sqlite3_errmsg(db));
                 }
                 sqlite3_bind_int(check_stmt, 1, chat_id);
-                
+
                 if (sqlite3_step(check_stmt) != SQLITE_ROW) {
                     sqlite3_finalize(check_stmt);
                     res.code = 404;
@@ -375,31 +375,31 @@ int main()
                     return res;
                 }
                 sqlite3_finalize(check_stmt);
-        
+
                 const char* insert_query = "INSERT INTO Messages (chat_id, sender, message, is_attachment, file_type) VALUES (?, ?, ?, ?, ?)";
                 if (sqlite3_prepare_v2(db, insert_query, -1, &stmt, nullptr) != SQLITE_OK) {
                     throw std::runtime_error(sqlite3_errmsg(db));
                 }
-        
+
                 sqlite3_bind_int64(stmt, 1, chat_id);
                 sqlite3_bind_text(stmt, 2, sender.c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_text(stmt, 3, content.c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_int(stmt, 4, is_attachment);
                 sqlite3_bind_text(stmt, 5, file_type.c_str(), -1, SQLITE_TRANSIENT);
-        
+
                 if (sqlite3_step(stmt) != SQLITE_DONE) {
                     throw std::runtime_error(sqlite3_errmsg(db));
                 }
-        
+
                 int64_t message_id = sqlite3_last_insert_rowid(db);
                 res.code = 200;
                 res.write("{\"id\": " + std::to_string(message_id) + "}");
-        
+
             } catch (const std::exception& e) {
                 res.code = 500;
                 res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
             }
-        
+
             if (stmt) sqlite3_finalize(stmt);
             return res; });
 
@@ -408,7 +408,7 @@ int main()
                 crow::response res;
                 add_cors_headers(res);
                 sqlite3_stmt* stmt = nullptr;
-            
+
                 try {
                     std::string chat_id = req.url_params.get("chat_id");
                     if (chat_id.empty()) {
@@ -416,14 +416,14 @@ int main()
                         res.write("{\"error\": \"Missing chat_id parameter\"}");
                         return res;
                     }
-                    
+
                     std::string query = "SELECT id, sender, message, created_at, is_attachment, file_type FROM Messages WHERE chat_id = ? ORDER BY created_at ASC";
                     if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
                         throw std::runtime_error(sqlite3_errmsg(db));
                     }
-            
+
                     sqlite3_bind_text(stmt, 1, chat_id.c_str(), -1, SQLITE_TRANSIENT);
-            
+
                     crow::json::wvalue::list messages;
                     while (sqlite3_step(stmt) == SQLITE_ROW) {
                         crow::json::wvalue message;
@@ -435,14 +435,14 @@ int main()
                         message["file_type"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
                         messages.push_back(std::move(message));
                     }
-            
+
                     res.write(crow::json::wvalue(messages).dump());
                     res.code = 200;
                 } catch (const std::exception& e) {
                     res.code = 500;
                     res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
                 }
-            
+
                 if (stmt) sqlite3_finalize(stmt);
                 return res; });
 
@@ -458,57 +458,57 @@ int main()
                     res.write("{\"error\": \"Invalid JSON\"}");
                     return res;
                 }
-                if (!x.has("headerColor") || !x.has("gradientColor") || 
-                    !x.has("textSpeed") || !x.has("fontSize") || 
+                if (!x.has("headerColor") || !x.has("gradientColor") ||
+                    !x.has("textSpeed") || !x.has("fontSize") ||
                     !x.has("model") || !x.has("isGradient")) {
                     res.code = 400;
                     res.write("{\"error\": \"Missing required fields\"}");
                     return res;
                 }
-        
+
                 std::string header_color = x["headerColor"].s();
                 std::string gradient_color = x["gradientColor"].s();
                 int text_speed = x["textSpeed"].i();
                 int font_size = x["fontSize"].i();
                 std::string model = x["model"].s();
                 bool is_gradient = x["isGradient"].b();
-        
+
                 const char* query = R"(
                     INSERT INTO Settings (
-                        header_color, 
-                        gradient_color, 
-                        text_speed, 
-                        font_size, 
-                        model, 
+                        header_color,
+                        gradient_color,
+                        text_speed,
+                        font_size,
+                        model,
                         run_time,
                         is_gradient
                     ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
                 )";
-        
+
                 if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) {
                     throw std::runtime_error(sqlite3_errmsg(db));
                 }
-        
+
                 sqlite3_bind_text(stmt, 1, header_color.c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_text(stmt, 2, gradient_color.c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_int(stmt, 3, text_speed);
                 sqlite3_bind_int(stmt, 4, font_size);
                 sqlite3_bind_text(stmt, 5, model.c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_int(stmt, 6, is_gradient ? 1 : 0);
-        
+
                 if (sqlite3_step(stmt) != SQLITE_DONE) {
                     throw std::runtime_error(sqlite3_errmsg(db));
                 }
-        
+
                 res.code = 200;
-                res.write("{\"message\": \"Settings saved successfully\", \"id\": " + 
+                res.write("{\"message\": \"Settings saved successfully\", \"id\": " +
                          std::to_string(sqlite3_last_insert_rowid(db)) + "}");
             }
             catch (const std::exception& e) {
                 res.code = 500;
                 res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
             }
-        
+
             if (stmt) {
                 sqlite3_finalize(stmt);
             }
@@ -521,7 +521,7 @@ int main()
             sqlite3_stmt* stmt = nullptr;
             try {
                 const char* query = R"(
-                    SELECT 
+                    SELECT
                         id,
                         header_color,
                         gradient_color,
@@ -530,15 +530,15 @@ int main()
                         model,
                         run_time,
                         is_gradient
-                    FROM Settings 
-                    ORDER BY created_at DESC 
+                    FROM Settings
+                    ORDER BY created_at DESC
                     LIMIT 1
                 )";
-        
+
                 if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) != SQLITE_OK) {
                     throw std::runtime_error(sqlite3_errmsg(db));
                 }
-        
+
                 if (sqlite3_step(stmt) == SQLITE_ROW) {
                     crow::json::wvalue settings;
                     settings["id"] = sqlite3_column_int(stmt, 0);
@@ -549,7 +549,7 @@ int main()
                     settings["model"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
                     settings["runTime"] = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
                     settings["isGradient"] = (sqlite3_column_int(stmt, 7) != 0);
-        
+
                     res.code = 200;
                     res.write(settings.dump());
                 } else {
@@ -560,7 +560,7 @@ int main()
                     default_settings["fontSize"] = 16;
                     default_settings["model"] = "default";
                     default_settings["isGradient"] = false;
-                    
+
                     res.code = 200;
                     res.write(default_settings.dump());
                 }
@@ -569,7 +569,7 @@ int main()
                 res.code = 500;
                 res.write("{\"error\": \"" + std::string(e.what()) + "\"}");
             }
-        
+
             if (stmt) {
                 sqlite3_finalize(stmt);
             }
@@ -597,10 +597,10 @@ int main()
         try {
             std::string input_text;
             int chat_id = -1;
-        
+
             if (is_binary) {
                 std::cout << "Received binary audio data, size: " << data.size() << " bytes" << std::endl;
-                
+
                 if (!whisper) {
                     std::cerr << "Error: Whisper interface not initialized" << std::endl;
                     crow::json::wvalue error_response;
@@ -611,7 +611,7 @@ int main()
                 }
                 std::string temp_file = saveTempWavFile(data);
                 std::cout << "Saved temporary WAV file: " << temp_file << std::endl;
-                
+
                 try {
                     std::cout << "Starting transcription..." << std::endl;
                     input_text = whisper->transcribe(temp_file);
@@ -629,7 +629,7 @@ int main()
                 } catch (const std::exception& e) {
                     fs::remove(temp_file);
                     std::cerr << "Error during transcription: " << e.what() << std::endl;
-                    
+
                     crow::json::wvalue error_response;
                     error_response["type"] = "error";
                     error_response["message"] = std::string("Error transcribing audio: ") + e.what();
@@ -647,17 +647,17 @@ int main()
                     std::cout << "Received confirmation for audio transcription with chat_id: " << chat_id << std::endl;
                 }
             }
-            
+
             // Use the Interface directly instead of through model_manager
             if (!input_text.empty() && llm_model && chat_id != -1) {
                 std::cout << "Generating response for input: " << input_text << std::endl;
                 std::string response = llm_model->generate(input_text);
-                
+
                 crow::json::wvalue response_json;
                 response_json["type"] = "response";
                 response_json["content"] = response;
                 response_json["chatId"] = chat_id;
-                
+
                 conn.send_text(response_json.dump());
             }
         } catch (const std::exception& e) {
@@ -692,7 +692,7 @@ int main()
      {
         fs::path filepath = projectPath / path;
         crow::response res;
-        
+
         if (hasExtension(path, ".html")) res.set_header("Content-Type", "text/html");
         else if (hasExtension(path, ".js")) res.set_header("Content-Type", "application/javascript");
         else if (hasExtension(path, ".css")) res.set_header("Content-Type", "text/css");
@@ -713,7 +713,7 @@ int main()
             }
             res.set_header("Content-Type", "text/html");
         }
-        
+
         res.write(std::string(
             std::istreambuf_iterator<char>(file),
             std::istreambuf_iterator<char>()
